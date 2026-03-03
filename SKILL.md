@@ -65,14 +65,48 @@ Before doing anything, parse the user's input for:
 - "Mission-critical", explicitly exhaustive → EXHAUSTIVE (4-5 advocates, 4-5 judges, stability audit, Fresh Eyes)
 - "Nuclear", "maximum rigor", adversarial-grade → NUCLEAR (5 advocates, 6 judges, 7 debate rounds, mid-debate checkpoint, stability audit, Fresh Eyes)
 
-**Display your parsing:**
+**IMPORTANT — Depth keyword disambiguation:** The word "nuclear" may appear in the
+user's question as subject matter (e.g., nuclear power, nuclear energy) rather than
+as a depth instruction. Only treat it as a depth selection if it clearly refers to
+the tribunal's depth tier (e.g., "use nuclear depth", "run this at nuclear",
+"/tribunal NUCLEAR"). When ambiguous, ask the user.
+
+**MANDATORY — Confirm depth with user before running:**
+
+After parsing, you MUST use the AskUserQuestion tool to confirm depth before
+proceeding. Present the auto-selected or parsed depth as the recommended option,
+with alternatives. Example:
+
+```
+Question: "What depth should this tribunal run at?"
+Options:
+  - "THOROUGH — 3-4 advocates, 3 judges, 3 debate rounds (~$3, 8-15 min)" (Recommended)
+  - "RIGOROUS — 3-4 advocates, 4 judges, 5 debate rounds (~$5, 15-25 min)"
+  - "NUCLEAR — 5 advocates, 6 judges, 7 rounds + checkpoint (~$15, 45-75 min)"
+  - "QUICK — 2 advocates, no judges, no debate (~$0.10, 1-2 min)"
+```
+
+Also ask about audio generation:
+
+```
+Question: "Generate audio screenplay?"
+Options:
+  - "Yes — generate screenplay + TTS audio (~2 min extra, uses ElevenLabs)"
+  - "No — text output only"
+```
+
+Only proceed after the user confirms both. This prevents depth/content confusion
+(e.g., "use nuclear" meaning nuclear power vs. NUCLEAR depth tier) and avoids
+unexpected TTS costs.
+
+**After confirmation, display your parsing:**
 
 ```
 Convening Tribunal session for: {TASK}
 
 Parsed intent:
 - TASK_TYPE = {TASK_TYPE}
-- DEPTH = {DEPTH}
+- DEPTH = {DEPTH} (confirmed)
 - ADVOCATES = {N} models generating solutions
 - JUDGES = {N} impartial judges (Justices + randomly drawn Appellate/Magistrate Judges)
 
@@ -110,6 +144,7 @@ Your submission follows the Hypothesis + Evidence format:
 for dir in \
   "." \
   "${CLAUDE_PLUGIN_ROOT:-}" \
+  "$HOME/.claude/skills/conclave" \
   "$HOME/.claude/skills/tribunal" \
   "$HOME/.agents/skills/tribunal" \
   "$HOME/.codex/skills/tribunal" \
