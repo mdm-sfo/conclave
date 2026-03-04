@@ -515,6 +515,121 @@ def _build_research_room(briefing: str, api_key: str) -> Optional[str]:
         return None
 
 
+# ── Post-submission claim verification ─────────────────────────────────────
+
+def verify_advocate_claims(
+    submissions: list[str],
+    briefing: str,
+    api_key: Optional[str] = None,
+    timeout: int = 45,
+) -> Optional[str]:
+    """Use Perplexity to fact-check specific claims from advocate submissions.
+
+    Called AFTER advocates submit but BEFORE the challenge round. Extracts
+    key factual claims from all submissions, sends them to Perplexity for
+    verification, and returns a structured "Claim Verification Brief" that
+    gets distributed to all advocates before challenges.
+
+    This levels the playing field — Perplexity advocates have built-in search,
+    but other models (Claude, GPT, Gemini) work from training data. By giving
+    everyone access to verified facts, hallucinated claims get caught earlier.
+
+    Args:
+        submissions: List of advocate submission texts (anonymized)
+        briefing: The original briefing text
+        api_key: Perplexity API key (falls back to PERPLEXITY_API_KEY env var)
+        timeout: Request timeout in seconds
+
+    Returns:
+        A formatted "Claim Verification Brief" markdown string, or None on failure.
+    """
+    pplx_key = api_key or os.environ.get("PERPLEXITY_API_KEY", "")
+    if not pplx_key:
+        return None
+
+    if not submissions:
+        return None
+
+    # Combine all submissions into a single block for claim extraction
+    combined = "\n\n---\n\n".join(
+        f"### Submission {i+1}\n\n{text}" for i, text in enumerate(submissions)
+    )
+
+    try:
+        r = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers={
+                "Authorization": f"Bearer {pplx_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "sonar-pro",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a fact-checker for a panel of expert analysts. "
+                            "Multiple experts have submitted independent assessments "
+                            "of the same question. Your job is to VERIFY their specific "
+                            "factual claims using web search.\n\n"
+                            "For each claim you check, report:\n"
+                            "- The claim (quote or paraphrase)\n"
+                            "- Verdict: ✓ Verified, ⚠ Partially true/misleading, "
+                            "✗ Incorrect, or ? Unable to verify\n"
+                            "- Source: URL or reference\n"
+                            "- Correction (if needed): what the evidence actually shows\n\n"
+                            "Focus on FACTUAL claims — specific numbers, dates, capabilities, "
+                            "features, specifications, pricing, regulatory status. "
+                            "Skip opinions, recommendations, and subjective assessments.\n\n"
+                            "Check 8-15 of the most important/contested claims. "
+                            "Prioritize claims where submissions disagree with each other. "
+                            "Format as a numbered list. Keep it under 1000 words."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"## Original Question\n\n{briefing}\n\n"
+                            f"## Expert Submissions to Fact-Check\n\n{combined}\n\n"
+                            f"Verify the key factual claims made in these submissions. "
+                            f"Today's date: {date.today().isoformat()}"
+                        ),
+                    },
+                ],
+                "max_tokens": 2500,
+                "temperature": 0.1,
+            },
+            timeout=timeout,
+        )
+        r.raise_for_status()
+        data = r.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        if not content.strip():
+            return None
+
+        # Extract citations if available
+        citations = data.get("citations", [])
+        lines = [
+            "# Claim Verification Brief\n",
+            "*The following fact-checks were performed automatically on advocate "
+            "submissions using web search. Use these to inform your challenges "
+            "and rebuttals. Verified claims can be cited with confidence; incorrect "
+            "claims should be challenged directly.*\n",
+            content.strip(),
+        ]
+        if citations:
+            lines.append("\n**Sources:**")
+            for i, url in enumerate(citations[:15], 1):
+                lines.append(f"{i}. {url}")
+        lines.append(
+            "\n*Source: Perplexity Sonar Pro — automated claim verification.*"
+        )
+        return "\n".join(lines)
+
+    except Exception:
+        return None
+
+
 # ── Public entry point ──────────────────────────────────────────────────────
 
 def enrich_briefing(briefing: str) -> str:
