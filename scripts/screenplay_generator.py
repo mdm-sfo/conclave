@@ -89,7 +89,8 @@ class CharacterDef:
 def discover_session_files(session_dir: Path) -> dict:
     """
     Scan a session directory and return a dict mapping file roles to paths.
-    Follows the naming conventions from council_orchestrator.py.
+    Supports both the new subdirectory layout (submissions/, deliberation/,
+    judicial/, meta/) and the legacy flat layout.
     """
     files: dict = {
         "briefing": None,
@@ -103,31 +104,42 @@ def discover_session_files(session_dir: Path) -> dict:
         "cardinal_alias_map": None,
     }
 
-    for path in sorted(session_dir.iterdir()):
-        name = path.name
+    # Determine search directories: use subdirectories if they exist,
+    # otherwise fall back to flat session_dir scan
+    root = Path(str(session_dir))  # normalise SessionDir → Path
+    search_dirs = [root]
+    for subdir in ("submissions", "deliberation", "judicial", "meta"):
+        candidate = root / subdir
+        if candidate.is_dir():
+            search_dirs.append(candidate)
 
-        if name == "briefing.md":
-            files["briefing"] = path
-        elif name == "fresh-eyes-review.md":
-            files["fresh_eyes"] = path
-        elif name == "alias-map.json":
-            files["alias_map"] = path
-        elif name == "cardinal-alias-map.json":
-            files["cardinal_alias_map"] = path
-        elif re.match(r"submission-advocate-[a-z]+\.md$", name):
-            files["submissions"].append(path)
-        elif re.match(r"challenge-by-advocate-[a-z]+\.md$", name):
-            files["challenges"].append(path)
-        elif re.match(r"critique-advocate-[a-z]+-on-advocate-[a-z]+\.md$", name):
-            # Older format: critique files treated as challenges
-            files["challenges"].append(path)
-        elif m := re.match(r"debate-round-(\d+)-advocate-([a-z]+)\.md$", name):
-            rnum = int(m.group(1))
-            files["debate_rounds"].setdefault(rnum, []).append(path)
-        elif re.match(r"(judgment|cardinal-judgment)-[a-z0-9-]+\.md$", name):
-            files["judgments"].append(path)
-        elif re.match(r"dissent-advocate-[a-z]+\.md$", name):
-            files["dissents"].append(path)
+    for search_dir in search_dirs:
+        for path in sorted(search_dir.iterdir()):
+            if path.is_dir():
+                continue
+            name = path.name
+
+            if name == "briefing.md" and files["briefing"] is None:
+                files["briefing"] = path
+            elif name == "fresh-eyes-review.md" and files["fresh_eyes"] is None:
+                files["fresh_eyes"] = path
+            elif name == "alias-map.json" and files["alias_map"] is None:
+                files["alias_map"] = path
+            elif name == "cardinal-alias-map.json" and files["cardinal_alias_map"] is None:
+                files["cardinal_alias_map"] = path
+            elif re.match(r"submission-advocate-[a-z]+\.md$", name):
+                files["submissions"].append(path)
+            elif re.match(r"challenge-by-advocate-[a-z]+\.md$", name):
+                files["challenges"].append(path)
+            elif re.match(r"critique-advocate-[a-z]+-on-advocate-[a-z]+\.md$", name):
+                files["challenges"].append(path)
+            elif m := re.match(r"debate-round-(\d+)-advocate-([a-z]+)\.md$", name):
+                rnum = int(m.group(1))
+                files["debate_rounds"].setdefault(rnum, []).append(path)
+            elif re.match(r"(judgment|cardinal-judgment)-[a-z0-9-]+\.md$", name):
+                files["judgments"].append(path)
+            elif re.match(r"dissent-advocate-[a-z]+\.md$", name):
+                files["dissents"].append(path)
 
     return files
 
@@ -1353,7 +1365,9 @@ def write_screenplay_md(
         f"**Generator:** screenplay_generator.py (github.com/mdm-sfo/conclave)  \n"
         f"\n---\n\n"
     )
-    output_path = session_dir / "screenplay.md"
+    narrative_dir = session_dir / "narrative"
+    narrative_dir.mkdir(parents=True, exist_ok=True)
+    output_path = narrative_dir / "screenplay.md"
     output_path.write_text(header + screenplay_text, encoding="utf-8")
     return output_path
 
@@ -1363,7 +1377,9 @@ def write_voice_script_json(
     session_dir: Path,
 ) -> Path:
     """Write the voice-script.json file."""
-    output_path = session_dir / "voice-script.json"
+    narrative_dir = session_dir / "narrative"
+    narrative_dir.mkdir(parents=True, exist_ok=True)
+    output_path = narrative_dir / "voice-script.json"
     output_path.write_text(json.dumps(voice_script, indent=2, ensure_ascii=False), encoding="utf-8")
     return output_path
 
@@ -1958,7 +1974,9 @@ def run_pipeline(
     )
 
     # Pass 1: LLM Extraction (skip if manifest already exists)
-    extraction_manifest = session_dir / "screenplay-extraction.json"
+    narrative_dir = Path(str(session_dir)) / "narrative"
+    narrative_dir.mkdir(parents=True, exist_ok=True)
+    extraction_manifest = narrative_dir / "screenplay-extraction.json"
     if extraction_manifest.exists():
         progress.info(f"Resuming from existing extraction manifest → {extraction_manifest.name}")
         manifest_data = json.loads(extraction_manifest.read_text())

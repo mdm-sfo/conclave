@@ -600,6 +600,23 @@ class SessionDir:
                   self.judicial, self.narrative, self.meta):
             d.mkdir(parents=True, exist_ok=True)
 
+    # Path-like proxies so SessionDir can be passed where Path is expected
+    @property
+    def name(self) -> str:
+        return self.root.name
+
+    def exists(self) -> bool:
+        return self.root.exists()
+
+    def iterdir(self):
+        return self.root.iterdir()
+
+    def glob(self, pattern: str):
+        return self.root.glob(pattern)
+
+    def rglob(self, pattern: str):
+        return self.root.rglob(pattern)
+
     def __truediv__(self, other: str) -> Path:
         """Allow sdir / 'filename' for top-level files."""
         return self.root / other
@@ -607,18 +624,11 @@ class SessionDir:
     def __str__(self) -> str:
         return str(self.root)
 
+    def __fspath__(self) -> str:
+        return str(self.root)
+
     def resolve(self) -> Path:
         return self.root.resolve()
-
-    def iterdir(self):
-        """Iterate all files recursively for counting."""
-        return self.root.rglob("*")
-
-    def glob(self, pattern: str):
-        return self.root.glob(pattern)
-
-    def rglob(self, pattern: str):
-        return self.root.rglob(pattern)
 
 
 def create_session_dir(base_dir: str, session_id: str) -> SessionDir:
@@ -2924,7 +2934,7 @@ def main():
         except Exception as _e:
             progress.warn(f"Screenplay generation failed: {_e}")
 
-        voice_script_path = session_dir / "voice-script.json"
+        voice_script_path = session_dir.narrative / "voice-script.json"
         if args.tts and voice_script_path.exists():
             if not os.environ.get("ELEVENLABS_API_KEY"):
                 progress.info("TTS skipped: ELEVENLABS_API_KEY not set.")
@@ -2970,9 +2980,9 @@ def main():
         print(f"  Debrief:    {session_dir.narrative}/debrief.md")
         if (session_dir.narrative / "play-by-play.md").exists():
             print(f"  Play-by-play: {session_dir.narrative}/play-by-play.md")
-        if (session_dir / "screenplay.md").exists():
-            print(f"  Screenplay: {session_dir}/screenplay.md")
-        audio_path = session_dir / f"{session_id}-audio.mp3"
+        if (session_dir.narrative / "screenplay.md").exists():
+            print(f"  Screenplay: {session_dir.narrative}/screenplay.md")
+        audio_path = session_dir.narrative / f"{session_id}-audio.mp3"
         if audio_path.exists():
             print(f"  Audio:      {audio_path}")
         print(f"  Log:        {session_dir.meta}/council-log.json")
