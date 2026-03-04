@@ -41,7 +41,7 @@ from typing import Optional
 # Add script directory to path for sibling imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from data_room_enricher import enrich_briefing
+from data_room_enricher import enrich_briefing, verify_advocate_claims
 from config_loader import (
     load_config, ConclaveConfig, DepthConfig, ModelDef,
     BISHOPS, PRIESTS, DEACONS,
@@ -311,11 +311,35 @@ Rank the submissions from strongest to weakest AFTER debate:
 | 1 | Advocate-X | [why — cite specific debate moments] |
 
 ### Verdict
-One of:
-- **ACCEPT [Advocate-X]**: This advocate's position is the strongest and survived scrutiny.
-- **SYNTHESIZE**: Combine the best elements. Specify which parts from which advocate.
-- **REMAND**: The evidence is still insufficient. Specify what's missing.
-  (Maximum 1 remand per session.)
+
+Choose ONE of **ACCEPT**, **SYNTHESIZE**, or **REMAND**.
+
+Then fill in the structured verdict table below. You MUST have one row per
+advocate. Every advocate gets an explicit ruling — no one is silently ignored.
+
+**ACCEPT [Advocate-X]**:
+| Advocate | Ruling | What | Rationale |
+|----------|--------|------|-----------|
+| Advocate-X | ACCEPT | [their core position] | [why it's strongest] |
+| Advocate-Y | REJECT | [their core position] | [why — cite evidence or debate moments] |
+| ... | ... | ... | ... |
+
+**SYNTHESIZE**:
+| Advocate | Ruling | What | Rationale |
+|----------|--------|------|-----------|
+| Advocate-X | ADOPT [element] | [specific element taken from this advocate] | [why this part is strong] |
+| Advocate-X | REJECT [element] | [specific element rejected from same advocate] | [why — even #1-ranked advocates can have parts rejected] |
+| Advocate-Y | ADOPT [element] | [specific element taken] | [why] |
+| ... | ... | ... | ... |
+
+**REMAND**: The evidence is still insufficient. Specify what's missing.
+(Maximum 1 remand per session.)
+
+**COHERENCE RULE**: If you rank an advocate #1 in the Ranking section but
+then REJECT their core position in the Verdict, you MUST explain the
+apparent contradiction. A #1 ranking means "argued best" — it does not
+obligate you to accept their conclusion, but you must acknowledge and
+explain the gap. Failure to do so is a judicial error.
 
 ### Judge's Note
 Meta-commentary on the deliberation: quality of challenges, intellectual honesty
@@ -668,6 +692,7 @@ def run_challenge_phase(
     config: ConclaveConfig,
     session_dir: Path,
     progress: Progress,
+    claim_verification: str = "",
 ) -> list[ModelResponse]:
     """Phase 4: Each advocate reads ALL other submissions and issues direct challenges.
 
@@ -695,15 +720,30 @@ def run_challenge_phase(
             progress.warn(f"No model found for {resp.alias} — skipping challenge")
             continue
 
+        verification_block = ""
+        if claim_verification:
+            verification_block = (
+                f"{'=' * 60}\n\n"
+                f"## Claim Verification Brief (automated fact-check)\n\n"
+                f"{claim_verification}\n\n"
+            )
+
         challenge_prompt = (
             f"## Original Briefing\n\n{briefing}\n\n"
             f"{'=' * 60}\n\n"
             f"## Your Submission ({resp.alias})\n\n{resp.content}\n\n"
             f"{'=' * 60}\n\n"
             f"## All Advocate Submissions\n\n{all_submissions}\n\n"
+            f"{verification_block}"
             f"{'=' * 60}\n\n"
             f"Now challenge every other advocate directly. Be specific. "
             f"Quote their claims and demand they defend them."
+            + (
+                " The Claim Verification Brief above contains automated "
+                "fact-checks of key claims — use verified/incorrect findings "
+                "to sharpen your challenges."
+                if claim_verification else ""
+            )
         )
 
         challenge_calls.append({
@@ -1143,6 +1183,118 @@ def run_cardinal_phase(
     return cardinal_responses, should_remand, remand_reason
 
 
+def check_verdict_coherence(
+    cardinal_responses: list[ModelResponse],
+    session_dir: Path,
+    progress: Progress,
+) -> list[str]:
+    """Post-judicial coherence gate.
+
+    Parses each judge's output looking for ranking-verdict contradictions:
+    the #1-ranked advocate's core position being REJECTed in the verdict
+    without an explicit explanation.
+
+    Returns a list of warning strings (empty if no issues found).
+    Appends warnings to the judgment files so downstream consumers see them.
+    """
+    good_cardinals = successful_responses(cardinal_responses)
+    warnings: list[str] = []
+
+    for resp in good_cardinals:
+        content = resp.content or ""
+        content_lower = content.lower()
+
+        # --- Extract #1-ranked advocate ---
+        rank1_advocate = None
+        # Look for "| 1 | Advocate-X |" in the ranking table
+        rank1_match = re.search(
+            r'\|\s*1\s*\|\s*(advocate-[a-z])\s*\|',
+            content_lower,
+        )
+        if rank1_match:
+            rank1_advocate = rank1_match.group(1)  # e.g. "advocate-a"
+
+        if not rank1_advocate:
+            continue
+
+        # --- Check verdict type ---
+        is_synthesize = "**synthesize**" in content_lower or "verdict: synthesize" in content_lower
+        is_accept = False
+        accepted_advocate = None
+        accept_match = re.search(r'\*\*accept\s*\[?(advocate-[a-z])', content_lower)
+        if accept_match:
+            is_accept = True
+            accepted_advocate = accept_match.group(1)
+
+        # Case 1: ACCEPT but not the #1-ranked advocate
+        if is_accept and accepted_advocate and accepted_advocate != rank1_advocate:
+            flag = (
+                f"\n\n---\n\n## ⚠ COHERENCE FLAG\n\n"
+                f"**Ranking-verdict mismatch**: {resp.alias} ranked "
+                f"{rank1_advocate.title()} #1 but ACCEPTED "
+                f"{accepted_advocate.title()}. These should typically "
+                f"align unless there is an explicit justification."
+            )
+            warnings.append(f"{resp.alias}: ranked {rank1_advocate} #1 but accepted {accepted_advocate}")
+            # Append flag to judgment file AND in-memory content
+            jpath = session_dir / f"judgment-{resp.alias.lower()}.md"
+            if jpath.exists():
+                jpath.write_text(jpath.read_text() + flag)
+            resp.content = (resp.content or "") + flag
+            progress.warn(f"Coherence flag: {resp.alias} ranked {rank1_advocate} #1 but accepted {accepted_advocate}")
+
+        # Case 2: SYNTHESIZE — check if #1-ranked advocate's position is REJECTed
+        if is_synthesize and rank1_advocate:
+            # Look for "REJECT" rows mentioning the #1 advocate
+            reject_pattern = re.compile(
+                rf'\|\s*{re.escape(rank1_advocate)}\s*\|\s*reject\b',
+                re.IGNORECASE,
+            )
+            reject_matches = reject_pattern.findall(content_lower)
+            # Also look for ADOPT rows for the same advocate
+            adopt_pattern = re.compile(
+                rf'\|\s*{re.escape(rank1_advocate)}\s*\|\s*adopt\b',
+                re.IGNORECASE,
+            )
+            adopt_matches = adopt_pattern.findall(content_lower)
+
+            if reject_matches and not adopt_matches:
+                # #1 ranked but ALL their elements were rejected
+                flag = (
+                    f"\n\n---\n\n## ⚠ COHERENCE FLAG\n\n"
+                    f"**Ranking-verdict contradiction**: {resp.alias} ranked "
+                    f"{rank1_advocate.title()} #1 but REJECTED all their "
+                    f"elements in the SYNTHESIZE verdict without adopting any. "
+                    f"A #1 ranking typically implies at least partial adoption."
+                )
+                warnings.append(
+                    f"{resp.alias}: ranked {rank1_advocate} #1 but rejected all their elements in synthesis"
+                )
+                jpath = session_dir / f"judgment-{resp.alias.lower()}.md"
+                if jpath.exists():
+                    jpath.write_text(jpath.read_text() + flag)
+                resp.content = (resp.content or "") + flag
+                progress.warn(
+                    f"Coherence flag: {resp.alias} ranked {rank1_advocate} #1 "
+                    f"but rejected all elements in synthesis"
+                )
+
+    if warnings:
+        # Write a coherence report
+        report = "# Verdict Coherence Check\n\n"
+        for w in warnings:
+            report += f"- ⚠ {w}\n"
+        report += (
+            "\nThese flags indicate potential inconsistencies between the "
+            "judge's ranking and their verdict. They do not invalidate the "
+            "verdict but should be considered by downstream consumers "
+            "(summary writer, human reader).\n"
+        )
+        (session_dir / "coherence-flags.md").write_text(report)
+
+    return warnings
+
+
 # ---------------------------------------------------------------------------
 # Phase 7: Fresh Eyes validation
 # ---------------------------------------------------------------------------
@@ -1477,10 +1629,11 @@ IMPORTANT RULES:
 - Keep the total summary under 1500 words (excluding the Build This prompt and appendix).
 - Write in plain, direct language. No hedging, no filler.
 
-Finally, ALWAYS include this appendix at the very end of the summary, after all
-other sections. Copy it VERBATIM — do not modify, summarize, or rephrase it:
+Finally, ALWAYS include the following two closing sections at the very end of the
+summary, after all other sections. Copy the "How The Tribunal Works" section
+VERBATIM — do not modify, summarize, or rephrase it. Then generate the Glossary.
 
-## Appendix: How The Tribunal Works
+## How The Tribunal Works
 
 The Tribunal is a structured multi-model deliberation system. Instead of asking
 one AI model a question and trusting its answer, the Tribunal convenes a panel
@@ -1518,7 +1671,50 @@ judicial checkpoint).
 
 The system is deterministic code — it cannot be sycophantic. It dispatches prompts,
 collects responses, anonymizes identities, and enforces the adversarial structure.
-The models argue; the code referees."""
+The models argue; the code referees.
+
+## Glossary
+
+This section defines terms used in the summary. It has two parts:
+a fixed set of Tribunal process terms, and domain-specific terms extracted
+from this particular deliberation.
+
+### Tribunal Terms
+
+Include these definitions VERBATIM — do not modify them:
+
+- **Advocate**: An independent AI model that produces a sealed submission in response
+  to the briefing. Advocates are anonymized (Advocate-A, Advocate-B, etc.) during
+  deliberation to prevent brand-bias.
+- **Justice / Judge**: An impartial AI model that evaluates advocate submissions after
+  debate. Justices (permanent seats) and Appellate/Magistrate Judges (drawn per session)
+  collectively form "The Bench."
+- **The Bench**: The panel of judges evaluating the deliberation.
+- **Challenge Round**: A phase where each advocate directly cross-examines the others'
+  submissions, identifying weaknesses and factual errors.
+- **ACCEPT**: A judicial verdict adopting one advocate's position as the strongest.
+- **SYNTHESIZE**: A judicial verdict combining the best elements from multiple advocates.
+- **REMAND**: A judicial verdict sending the case back to advocates for further debate
+  because the evidence is insufficient.
+- **Fresh Eyes**: A zero-context reviewer (EXHAUSTIVE+ depth) who reads only the final
+  output without seeing the debate, checking for coherence and groupthink artifacts.
+- **Position Stability**: A per-round score (1-5) tracking how much each advocate's
+  position shifted, used to detect sycophantic drift.
+- **Sycophantic Drift**: When a model changes its position to agree with others due
+  to social pressure rather than new evidence.
+- **Data Room**: Pre-gathered research (web search, financial data, legal cases) provided
+  to all advocates before deliberation as optional context.
+- **Dissent**: A formal objection filed by an advocate whose position was not adopted
+  by the judicial verdict, analogous to a Supreme Court dissent.
+
+### Domain Terms
+
+Now extract 5-15 domain-specific terms, acronyms, or jargon from THIS deliberation
+that a general reader might not know. For each, write a one-sentence definition.
+Only include terms that actually appeared in the submissions or judicial opinions.
+Do NOT repeat the Tribunal Terms above. Format as a bulleted list:
+
+- **[Term]**: [One-sentence definition]"""
 
 
 def generate_session_summary(
@@ -2324,6 +2520,26 @@ def main():
     all_responses["advocates"] = advocate_responses
 
     # ================================================================
+    # Phase 3.5: Automated claim verification (BALANCED+)
+    # ================================================================
+    claim_verification = ""
+    if config.depth.debate_rounds > 0:
+        good_adv = successful_responses(advocate_responses)
+        submissions = [r.content for r in good_adv if r.content]
+        if submissions:
+            progress.info("Claim verification: fact-checking advocate submissions...")
+            verification_result = verify_advocate_claims(
+                submissions=submissions,
+                briefing=briefing_text,
+            )
+            if verification_result:
+                claim_verification = verification_result
+                (session_dir / "claim-verification.md").write_text(verification_result)
+                progress.info(f"Claim verification brief generated ({len(verification_result)} chars)")
+            else:
+                progress.info("Claim verification: skipped (no Perplexity API key or no result)")
+
+    # ================================================================
     # Phase 4: Challenge round (BALANCED+)
     # ================================================================
     challenge_responses: list[ModelResponse] = []
@@ -2335,6 +2551,7 @@ def main():
             config=config,
             session_dir=session_dir,
             progress=progress,
+            claim_verification=claim_verification,
         )
         all_responses["challenges"] = challenge_responses
 
@@ -2526,6 +2743,17 @@ def main():
             )
             all_responses["cardinals"].extend(cardinal_responses_2)
             cardinal_responses = cardinal_responses_2
+
+    # ================================================================
+    # Verdict coherence gate (after all judicial review is final)
+    # ================================================================
+    coherence_warnings: list[str] = []
+    if has_cardinals and cardinal_responses:
+        coherence_warnings = check_verdict_coherence(
+            cardinal_responses=cardinal_responses,
+            session_dir=session_dir,
+            progress=progress,
+        )
 
     # ================================================================
     # Dissenting opinions (BALANCED+ — after verdict, before Fresh Eyes)
