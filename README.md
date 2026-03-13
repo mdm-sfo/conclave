@@ -69,35 +69,19 @@ The Tribunal works with just a Together AI key. Additional features unlock as yo
 
 ## How It Works
 
-### 1. Briefing & Data Room
+The Tribunal is a structured multi-model deliberation system. Instead of asking one AI model a question and trusting its answer, the Tribunal convenes a panel of independent models, forces them to argue, and subjects their conclusions to judicial review. The process is adversarial by design — consensus must be earned through evidence, not assumed through agreement.
 
-The orchestrator reads your question from a markdown file. If it detects stock tickers, it enriches the briefing with live market data (via Massive.com for U.S. equities, Bavest for European markets) so every advocate starts from the same facts. A Perplexity research room can inject web search context.
+**Advocates** are independent AI models (e.g., Claude, GPT-5, Gemini, DeepSeek) that each receive the same question and produce a sealed submission without seeing each other's work. They are anonymized as Advocate-A, Advocate-B, etc. to prevent brand-bias from influencing the judges. Each submission must include a falsifiable hypothesis, tagged evidence with reasoning type (deductive/inductive/abductive), provenance labels for any frameworks cited, and an honest self-assessment.
 
-### 2. Advocate Submissions
+**Challenges** follow submissions. Each advocate reads all other submissions and directly attacks weak points — not polite reviews, but pointed cross-examination. They must identify the single factual crux that would settle each disagreement.
 
-Each advocate receives the enriched briefing independently and submits a structured argument: hypothesis, evidence (with reasoning type), confidence level, and counterargument acknowledgment. Submissions are anonymized before anyone else sees them.
+**Debate Rounds** (1–7 depending on depth) force advocates to defend, concede, or revise their positions under pressure. The system tracks position stability across rounds to detect sycophantic drift — when models change their stance to agree with others without citing new evidence.
 
-### 3. Cross-Examination
+**Judges** (called Justices on The Bench) are separate models that never participated as advocates. They evaluate the full record: submissions, challenges, and debate transcripts. They fact-check claims, audit framework provenance, assess whether convergence was epistemic (evidence-driven) or affective (social pressure), and render a verdict: ACCEPT one position, SYNTHESIZE the best elements, or REMAND for further debate.
 
-Every advocate reads all other submissions and issues direct challenges — targeting specific claims, demanding evidence, and probing weaknesses.
+**Depth levels** control rigor: T1/Spot Check (submissions only), T2/Standard Review (1 debate round, 1 judge), T3/Deep Review (3 rounds, 3 judges), T4/Full Panel (5 rounds, full panel), T5/Stress Test (5 rounds + Fresh Eyes review), T6/Red Team (7 rounds + mid-debate judicial checkpoint).
 
-### 4. Adversarial Debate
-
-Multiple rounds. For each challenge, advocates must choose: **DEFEND** (counter with evidence), **CONCEDE** (acknowledge the flaw), or **REVISE** (update their position). Position stability is tracked across rounds to catch sycophantic drift — models that flip under social pressure without new evidence.
-
-### 5. Judicial Review
-
-Judges who never participated in the debate evaluate the full transcript:
-
-- **Bishops** (permanent bench, T2+) — Qwen 3.5 397B, DeepSeek R1
-- **Priests** (rotation pool, T3+) — MiniMax M2.5, Kimi K2, Zhipu GLM-4.7, Mistral Large
-- **Deacons** (extended bench, T4+) — GPT-OSS 120B, Qwen 3 235B, Zhipu GLM-5, DeepCogito v2.1
-
-Judges render verdicts: **ACCEPT** (clear winner), **SYNTHESIZE** (merge best elements), or **REMAND** (send back for one more round, max once).
-
-### 6. Fresh Eyes & Summary
-
-At T5+, a model that never saw any of the deliberation reviews the final output for coherence. The session concludes with a structured summary: Question, Recommended Outcome, How We Got Here, and actionable next steps.
+The system is deterministic code — it cannot be sycophantic. It dispatches prompts, collects responses, anonymizes identities, and enforces the adversarial structure. The models argue; the code referees.
 
 ## Model Roster
 
