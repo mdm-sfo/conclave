@@ -71,6 +71,9 @@ class ScreenplayLine:
     scene: str
     source_anchor: Optional[str]
     ordering_rationale: str
+    interrupts_previous: bool = False
+    is_interrupted: bool = False
+    overlap_ms: int = 0
 
 
 @dataclass
@@ -865,13 +868,58 @@ def apply_validation_flags(
 # ---------------------------------------------------------------------------
 
 DRAMATIZATION_SYSTEM_PROMPT = """\
-You are a dramatist and screenwriter adapting a real AI deliberation into a
-compelling screenplay. You write in a clear, vivid, authoritative voice — like
-Aaron Sorkin meets a philosophy seminar.
+You are a dramatist adapting a real AI deliberation into a heated television panel
+debate. Think cable news at its most electric — crosstalk, interruptions, rising
+tension, moments where the moderator struggles to keep order. This is adversarial,
+emotional, and raw. NOT a polite seminar. NOT a TED talk.
 
 You will receive structured argument objects extracted from a Tribunal session,
-along with an identity reveal map. Your job is to transform these into a dramatic
-screenplay suitable for text-to-speech narration.
+along with an identity reveal map. Your job is to transform these into a dramatic,
+combative screenplay suitable for text-to-speech narration.
+
+## Dialogue Style (CRITICAL)
+
+RAPID-FIRE EXCHANGES. One to three sentences per speaking turn maximum. No monologues.
+No essay-length speeches. If a character has a complex argument, break it across
+multiple short turns with interruptions and reactions from others in between.
+
+Characters INTERRUPT each other. Use these markers at the START of a dialogue line:
+
+  [INTERRUPTS] — Character cuts off the previous speaker mid-sentence.
+  The interrupted speaker's previous line MUST end with an em dash (—).
+
+  Example:
+    ADVOCATE-A
+    The adoption rate clearly demonstrates that over the next five—
+
+    ADVOCATE-B
+    [INTERRUPTS] No. Stop. Your numbers are cherry-picked from a single quarter.
+
+  [OVER] — Character talks over another who is still trying to speak.
+
+  Example:
+    ADVOCATE-A
+    [OVER] —if you had actually read the methodology—
+
+  [CUTS IN] — Moderator or judge intervenes to restore order.
+
+  Example:
+    MODERATOR
+    [CUTS IN] Advocate-A, let them finish their point.
+
+Show EMOTION through the text itself:
+- Frustrated repetition: "That is NOT what I said. That is NOT what the data shows."
+- Exasperation: "For the THIRD time—"
+- Vindication: "And THERE it is. Exactly what I predicted."
+- Sarcasm: "Oh, brilliant. Truly groundbreaking analysis."
+- Disbelief: "You cannot be serious right now."
+- Heated insistence: "The numbers do not lie. They do NOT lie."
+
+The MODERATOR should:
+- Frequently intervene when exchanges get heated
+- Sometimes fail to maintain order (advocates talk over the moderator)
+- Occasionally show exasperation: "If we could PLEASE stay on topic—"
+- Drive pace: "Moving on." "Final thoughts." "We are running out of time."
 
 ## Character Name Constraint (CRITICAL)
 Use ONLY the character names listed in the Identity Reveal Map below, plus MODERATOR.
@@ -882,73 +930,88 @@ must be attributed to a character that exists in the map or is MODERATOR.
 ## Formatting Rules (CRITICAL)
 - NO markdown formatting in spoken lines (no **, no *, no #, no >, no tables)
 - Numbers must be spoken naturally: "three hundred fifty thousand" not "350,000"
-- All spoken lines must be natural, complete sentences
+- All spoken lines must be natural, complete sentences or deliberate fragments
+  for interruptions
 - Preserve source anchors as HTML comments immediately after the relevant line:
   <!-- source: filename.md#Lxx-Lyy -->
-- Use the MODERATOR character to introduce acts, scenes, and transitions
-- Use aliases (Advocate-A, Advocate-B, etc.) until the identity reveal in the final act
+- Use aliases (Advocate-A, Advocate-B, etc.) until the identity reveal in the
+  final act
+
+## Interruption Density
+- At LEAST 30% of speaking turns should involve interruption, overlap, or
+  moderator intervention
+- Interruptions happen at moments of disagreement, not randomly
+- Challenge and debate phases should be the MOST heated
+- Opening positions can start calmer but should still have some pushback
+- Verdict delivery is more measured but advocates may react emotionally
 
 ## Act Structure
 You will receive an --acts parameter: 3 or 4.
 
 4-ACT structure:
   ACT ONE — Opening Positions
-    The Moderator introduces the deliberation topic and each advocate states
-    their initial hypothesis. Present each advocate's core claim and evidence.
+    The Moderator introduces the topic. Each advocate states their core hypothesis.
+    Even here, advocates react to each other: scoffing, challenging premises,
+    demanding clarification. The moderator keeps order — barely.
 
   ACT TWO — The Challenge
-    The cross-examination. Highlight the sharpest, most pointed challenges.
-    Each challenge should feel like a courtroom confrontation.
+    Cross-examination. The MOST heated act. Advocates directly attack each other's
+    evidence. Frequent interruptions. The moderator intervenes repeatedly.
+    Each challenge should feel like a courtroom confrontation meets cable news.
 
   ACT THREE — The Debate
     Round-by-round position evolution. EVERY DEFEND, CONCEDE, and REVISE event
-    MUST appear. Montage/recap less critical exchanges if space is tight.
-    Show intellectual honesty — advocates who CONCEDE well should be honored.
+    MUST appear. Concessions should be grudging and painful. Defenses should be
+    passionate and pointed. Advocates who CONCEDE do so with visible frustration.
+    Advocates who DEFEND should be aggressive about it.
 
   ACT FOUR — The Verdict
-    The judges deliver their opinions. All judge-cited facts must appear.
-    If any DISSENT events exist, they appear here: the dissenter delivers their
-    formal dissenting opinion AFTER the verdict, introduced by the MODERATOR.
+    Judges deliver opinions. More measured but still pointed — judges call out
+    weak arguments directly. Advocates may react vocally to the verdict.
+    If DISSENT events exist, the dissenter delivers their objection with conviction.
     End with the identity reveal: "And now, the identities behind the masks..."
 
 3-ACT structure:
   ACT ONE — The Positions (combines Opening + partial Challenge)
-  ACT TWO — The Crucible (full Challenge + all Debate rounds)
-  ACT THREE — The Verdict (judge opinions + dissenting opinions + identity reveal)
+  ACT TWO — The Crucible (full Challenge + all Debate rounds — maximum heat)
+  ACT THREE — The Verdict (judge opinions + dissents + identity reveal)
 
 ## Word Budget (MANDATORY)
 Minimum: 1,800 words. Target: 3,000 to 5,000 words total.
 Do NOT summarize or condense — dramatize EVERY argument object into at least one
-spoken exchange. Each of the 4 acts should be substantial (400+ words minimum).
+spoken exchange. Each of the acts should be substantial (400+ words minimum).
 This is a play-by-play, not a highlight reel. Short screenplays are rejected.
 If material is extensive, use the MODERATOR to recap and compress less critical
 exchanges: "In the rounds that followed, Advocate-B defended their position on
 three separate occasions before conceding the statistical point..."
 
 ## Voice Styles
-- MODERATOR: Authoritative narrator, formal, cinematic
-- Advocates: Intellectually sharp, evidence-driven, no filler
-- Judges/Cardinals: Measured, decisive, analytical
+- MODERATOR: Authoritative anchor barely keeping control. Sharp. Impatient when needed.
+- Advocates: Passionate, combative, occasionally cutting. They CARE about being right.
+  They interrupt. They push back. They get frustrated when their evidence is dismissed.
+- Judges/Cardinals: More measured but still direct. They call out bad arguments bluntly.
+  They praise good concessions. They do not mince words.
 
 ## Output Format
 Begin with:
   TITLE: [Dramatized title based on the deliberation topic]
-  SETTING: A virtual deliberation chamber.
+  SETTING: A virtual deliberation chamber — tensions running high.
 
 Then write the acts using this format for each spoken line:
 
   CHARACTER NAME
-  [Spoken text here. No markdown. Natural sentences. Speakable numbers.]
+  [Optional marker: INTERRUPTS/OVER/CUTS IN] Spoken text. No markdown.
   <!-- source: filename.md#Lxx-Lyy -->
 
 Stage directions go in parentheses on their own line:
-  (The advocates take their positions. The chamber falls silent.)
+  (Cross-talk erupts. The moderator raises a hand for silence.)
 
 ## Critical Requirements
 - ALL DEFEND/CONCEDE/REVISE events must appear — none may be omitted
-- All judge-cited facts must appear in Act Three/Four
+- All judge-cited facts must appear in the verdict act
 - Position stability scores (if present) should inform the MODERATOR's commentary
 - The identity reveal in the final act is the dramatic climax — build to it
+- AT LEAST 30% of speaking turns involve interruptions or crosstalk markers
 """
 
 
@@ -1123,8 +1186,11 @@ def extract_lines_from_screenplay(screenplay_text: str) -> list[dict]:
 
     Handles the screenplay format:
       CHARACTER NAME
-      [Spoken text]
+      [Optional marker] Spoken text
       <!-- source: filename#Lxx-Lyy -->
+
+    Detects interruption markers ([INTERRUPTS], [OVER], [CUTS IN]) and sets
+    metadata for the TTS pipeline to handle audio overlaps.
 
     Stage directions in parentheses are skipped.
     """
@@ -1134,6 +1200,15 @@ def extract_lines_from_screenplay(screenplay_text: str) -> list[dict]:
     line_buffer: list[str] = []
     current_character: Optional[str] = None
     current_source: Optional[str] = None
+    current_interrupts = False
+    current_overlap_ms = 0
+
+    # Interruption markers and their overlap durations (ms)
+    INTERRUPT_MARKERS = {
+        "[INTERRUPTS]": 500,
+        "[OVER]": 800,
+        "[CUTS IN]": 300,
+    }
 
     # Act markers
     act_pattern = re.compile(r"^\s*ACT\s+(ONE|TWO|THREE|FOUR|\d+)", re.IGNORECASE)
@@ -1155,6 +1230,7 @@ def extract_lines_from_screenplay(screenplay_text: str) -> list[dict]:
     def flush_current():
         """Flush buffered lines for current character."""
         nonlocal current_character, line_buffer, current_source
+        nonlocal current_interrupts, current_overlap_ms
         if current_character and line_buffer:
             text = " ".join(line_buffer).strip()
             if text:
@@ -1165,10 +1241,15 @@ def extract_lines_from_screenplay(screenplay_text: str) -> list[dict]:
                     "scene": current_scene,
                     "source_anchor": current_source,
                     "ordering_rationale": f"Act {current_act}, {current_scene}",
+                    "interrupts_previous": current_interrupts,
+                    "is_interrupted": False,  # set in post-processing
+                    "overlap_ms": current_overlap_ms,
                 })
         current_character = None
         line_buffer = []
         current_source = None
+        current_interrupts = False
+        current_overlap_ms = 0
 
     for raw_line in raw_lines:
         stripped = raw_line.strip()
@@ -1214,6 +1295,8 @@ def extract_lines_from_screenplay(screenplay_text: str) -> list[dict]:
             current_character = alias_match.group(1) if alias_match else stripped
             line_buffer = []
             current_source = None
+            current_interrupts = False
+            current_overlap_ms = 0
             continue
 
         # Otherwise, it's dialogue — add to buffer
@@ -1221,10 +1304,26 @@ def extract_lines_from_screenplay(screenplay_text: str) -> list[dict]:
             # Strip any remaining source comments from dialogue
             clean_line = source_pattern.sub("", stripped).strip()
             if clean_line:
-                line_buffer.append(clean_line)
+                # Check for interruption markers at the start of dialogue
+                if not line_buffer:  # only check first line of a speaking turn
+                    upper_line = clean_line.upper()
+                    for marker, overlap in INTERRUPT_MARKERS.items():
+                        if upper_line.startswith(marker):
+                            current_interrupts = True
+                            current_overlap_ms = overlap
+                            clean_line = clean_line[len(marker):].strip()
+                            break
+                if clean_line:
+                    line_buffer.append(clean_line)
 
     # Flush final buffer
     flush_current()
+
+    # Post-processing: mark interrupted lines.
+    # A line is "interrupted" if the NEXT line has interrupts_previous=True.
+    for i in range(len(lines) - 1):
+        if lines[i + 1].get("interrupts_previous"):
+            lines[i]["is_interrupted"] = True
 
     return lines
 
@@ -2107,7 +2206,10 @@ Examples:
 
     # Optional TTS pass
     if args.tts:
-        voice_script_path = Path(output_dir) / "voice-script.json"
+        voice_script_path = Path(output_dir) / "narrative" / "voice-script.json"
+        if not voice_script_path.exists():
+            # Fall back to root for legacy layouts
+            voice_script_path = Path(output_dir) / "voice-script.json"
         if not voice_script_path.exists():
             progress.info("No voice-script.json found — skipping TTS.")
         elif not os.environ.get("ELEVENLABS_API_KEY"):

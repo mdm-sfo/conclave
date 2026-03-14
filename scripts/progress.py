@@ -3,7 +3,7 @@ Tribunal progress display — stderr output for host agent visibility.
 
 Usage:
     from progress import Progress
-    p = Progress("tribunal-20260228-211400", "THOROUGH")
+    p = Progress("tribunal-20260228-211400", "T3")
     p.session_start()
     p.phase(2, "Independent work — dispatching to 4 advocates...")
     p.model_success("Claude Sonnet", 3.2, 1450)
@@ -81,3 +81,6 @@ class Progress:
 
     def error(self, msg: str):
         self._write(f"  ✗ ERROR: {msg}")
+
+    def justice_substitution(self, failed: str, substitute: str, role: str):
+        self._write(f"  ⚖ {role} fallback: {failed} → {substitute}")

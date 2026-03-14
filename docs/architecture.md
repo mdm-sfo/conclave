@@ -2,7 +2,7 @@
 
 > **Author:** m@murrays.org
 > **Date:** February 28, 2026
-> **Status:** DRAFT — Design Review (updated with Kelley-Riedl 2026 findings + NUCLEAR tier)
+> **Status:** DRAFT — Design Review (updated with Kelley-Riedl 2026 findings + T6 tier)
 > **Version:** 0.5.0
 
 ---
@@ -31,7 +31,7 @@
 
 Single-model AI interactions suffer from well-documented failure modes: hallucinations go unchecked, sycophancy masks weak reasoning, and blind spots compound silently. The Tribunal solves this by turning any coding agent into the orchestrator of a structured multi-model deliberation. When given a task — write a prompt, research a topic, architect a system — the host agent does the work itself, then convenes a tribunal of 2–5 additional AI models via API. The models submit independent solutions, exchange structured critiques, debate disagreements with evidence, and converge on a best-in-class output validated by a "Fresh Eyes" reviewer with zero prior context.
 
-The v0.5.0 update incorporates findings from Kelley & Riedl (2026), "Sycophantic Drift in Multi-Turn LLM Dialogues," which demonstrated that multi-turn debate accelerates sycophantic convergence — flip rates reach ~80% by round 10, with rounds 3–5 as the critical "interesting zone." The paper also established a key distinction between *affective alignment* (changing tone toward the challenger) and *epistemic alignment* (abandoning one's actual position). The Tribunal v0.5.0 addresses this with position stability tracking, advisor-framed prompts, and a new NUCLEAR depth tier with mid-debate judicial checkpoints.
+The v0.5.0 update incorporates findings from Kelley & Riedl (2026), "Sycophantic Drift in Multi-Turn LLM Dialogues," which demonstrated that multi-turn debate accelerates sycophantic convergence — flip rates reach ~80% by round 10, with rounds 3–5 as the critical "interesting zone." The paper also established a key distinction between *affective alignment* (changing tone toward the challenger) and *epistemic alignment* (abandoning one's actual position). The Tribunal v0.5.0 addresses this with position stability tracking, advisor-framed prompts, and a new T6 (Red Team) depth tier with mid-debate judicial checkpoints.
 
 The skill ships as a portable Agent Skills package (SKILL.md + bundled Python scripts) that installs identically on Claude Code, Codex CLI, Gemini CLI, and GitHub Copilot CLI. It draws on the research-backed protocols from the [AI Council Framework](https://github.com/focuslead/ai-council-framework) — including hard debate-round limits, confidence-weighted voting, and protected dissent — and packages them into a practical, installable skill that any developer can run from their terminal today.
 
@@ -123,18 +123,18 @@ Judges are assigned **randomly** at session start from the available model pool.
 
 | Depth | Advocates | Judges | Total Models |
 |-------|-----------|-----------|-------------|
-| QUICK | 2 | 0 (no judging phase) | 2 |
-| BALANCED | 2-3 | 1 | 3-4 |
-| THOROUGH | 3-4 | 2-3 | 5-7 |
-| RIGOROUS | 3-4 | 2-4 | 6-8 |
-| EXHAUSTIVE | 4-5 | 2-5 | 7-10 |
-| NUCLEAR | 5 | 2-6 | 8-11 |
+| T1 | 2 | 0 (no judging phase) | 2 |
+| T2 | 2-3 | 1 | 3-4 |
+| T3 | 3-4 | 2-3 | 5-7 |
+| T4 | 3-4 | 2-4 | 6-8 |
+| T5 | 4-5 | 2-5 | 7-10 |
+| T6 | 5 | 2-6 | 8-11 |
 
 **Random assignment rules:**
 1. Judges are selected randomly from the configured model pool at session start.
 2. A model cannot serve as both Advocate and Judge in the same session.
 3. The orchestrator (host agent) is never a Judge — it may be an Advocate but never a judge.
-4. At BALANCED+ depths, at least one Judge should be from a different provider family than any Advocate (to maximize independence).
+4. At T2+ depths, at least one Judge should be from a different provider family than any Advocate (to maximize independence).
 5. Judge assignments are logged but NOT revealed to Advocates during deliberation.
 
 **What judges verify:**
@@ -171,7 +171,7 @@ Council logs must be simultaneously **human-readable** (scannable Markdown) and 
 ```yaml
 session_id: "tribunal-20260228-183042"
 timestamp: "2026-02-28T18:30:42-08:00"
-depth: "THOROUGH"           # QUICK | BALANCED | THOROUGH | RIGOROUS | EXHAUSTIVE
+depth: "T3"                 # T1 | T2 | T3 | T4 | T5
 task_type: "prompt_engineering"
 models:
   - id: "claude-4-sonnet"
@@ -501,11 +501,11 @@ timestamp: "2026-02-28T18:43:00-08:00"
                        │                         └─────┬────┘
           ┌────────────┤                               │
           │ REMAND?    │ NO                     ┌──────┘
-          ▼ YES        ▼                        │ NUCLEAR?
+          ▼ YES        ▼                        │ T6?
  ┌──────────┐    ┌──────────┐    ┌──────────┐   ▼ YES
  │ Advocates│    │7.VALIDATE│───▶│ 8.DELIVER│   ┌──────────────┐
  │  revise  │    │(Fresh Eyes)   │          │   │Mid-Debate    │
- └────┬─────┘    │EXHAUSTIVE+│   └──────────┘   │Judicial      │
+ └────┬─────┘    │T5+        │   └──────────┘   │Judicial      │
       │          └──────────┘                   │Checkpoint @R4│
       └──────▶ Back to Phase 6                  └──────┬───────┘
                (re-evaluate, max 1 remand)             │
@@ -520,12 +520,12 @@ The orchestrator receives the user's task and constructs a standardized briefing
 
 1. **Parse the task** — Identify task type (prompt engineering, code review, research, architecture, etc.).
 2. **Auto-select depth** — Based on task complexity, suggest a depth level (user can override). Heuristics:
-   - Simple question → QUICK (2 models, 0 debate rounds)
-   - Standard task → BALANCED (3 models, 1 round)
-   - Important deliverable → THOROUGH (4 models, 3 rounds)
-   - High-stakes decision → RIGOROUS (4 models, 5 rounds)
-   - Mission-critical → EXHAUSTIVE (5 models, 5 rounds + stability audit + Fresh Eyes)
-   - Adversarial-grade validation → NUCLEAR (5 models, 7 rounds + mid-debate judicial checkpoint + stability audit + Fresh Eyes)
+   - Simple question → T1 (2 models, 0 debate rounds)
+   - Standard task → T2 (3 models, 1 round)
+   - Important deliverable → T3 (4 models, 3 rounds)
+   - High-stakes decision → T4 (4 models, 5 rounds)
+   - Mission-critical → T5 (5 models, 5 rounds + stability audit + Fresh Eyes)
+   - Adversarial-grade validation → T6 (5 models, 7 rounds + mid-debate judicial checkpoint + stability audit + Fresh Eyes)
 3. **Select advocates** — Choose models from the configured pool based on depth level and task type.
 4. **Generate the briefing document** — Write the Task Briefing block (see Communication Format above).
 
@@ -577,7 +577,7 @@ Each model reviews every other submission using the "Top 5 Strengths / Top 5 Con
 3. The orchestrator collects all critiques and appends them to the session log.
 4. **Cross-pollination checkpoint:** At this point, each model has seen all other approaches and provided structured feedback.
 
-> **API call count for critique phase:** For N models, this requires N × (N-1) critique generations. At THOROUGH depth (4 models), that's 12 critique calls. To manage cost, each critique prompt is compact: the model receives only the target submission + briefing, not the full debate history.
+> **API call count for critique phase:** For N models, this requires N × (N-1) critique generations. At T3 depth (4 models), that's 12 critique calls. To manage cost, each critique prompt is compact: the model receives only the target submission + briefing, not the full debate history.
 
 ### Phase 5: Debate Rounds (Depth-Dependent)
 
@@ -595,16 +595,16 @@ Debate occurs only when there are meaningful disagreements. The orchestrator det
 
 | Depth | Max Rounds | Mid-Debate Checkpoint | Stability Audit | Fresh Eyes |
 |-------|------------|----------------------|-----------------|------------|
-| QUICK | 0 | — | No | No |
-| BALANCED | 1 | — | No | No |
-| THOROUGH | 3 | — | No | No |
-| RIGOROUS | 5 | — | No | No |
-| EXHAUSTIVE | 5 | — | Yes | Yes |
-| NUCLEAR | 7 | After R4 | Yes | Yes |
+| T1 | 0 | — | No | No |
+| T2 | 1 | — | No | No |
+| T3 | 3 | — | No | No |
+| T4 | 5 | — | No | No |
+| T5 | 5 | — | Yes | Yes |
+| T6 | 7 | After R4 | Yes | Yes |
 
-#### NUCLEAR Mid-Debate Judicial Checkpoint
+#### T6 Mid-Debate Judicial Checkpoint
 
-At NUCLEAR depth, debate splits into two halves with a judicial checkpoint between them:
+At T6 (Red Team) depth, debate splits into two halves with a judicial checkpoint between them:
 
 ```
 Rounds 1-4: Advocates debate normally
@@ -623,11 +623,11 @@ This design is directly motivated by Kelley & Riedl's finding that personalized 
 ```
 Round 1: Critiques received → Updated positions
 Round 2: Counter-arguments → Refined positions
-Round 3: Deepened positions (HARD STOP for THOROUGH)
+Round 3: Deepened positions (HARD STOP for T3)
   ...
-Round 5: (HARD STOP for RIGOROUS/EXHAUSTIVE)
+Round 5: (HARD STOP for T4/T5)
   ...
-Round 7: (HARD STOP for NUCLEAR, with judicial checkpoint after R4)
+Round 7: (HARD STOP for T6, with judicial checkpoint after R4)
          │
          ▼
     If consensus target met → Synthesize
@@ -663,7 +663,7 @@ This zero-context review catches:
 ### Phase 8: Final Output, Session Summary & Debrief
 
 1. Incorporate Fresh Eyes feedback into the final output (if changes are warranted).
-2. Generate the session summary (BALANCED+ only) — a canonical 4-section document synthesized by the first Justice (Qwen 3.5 397B). Contains:
+2. Generate the session summary (T2+ only) — a canonical 4-section document synthesized by the first Justice (Qwen 3.5 397B). Contains:
    - **Question** — What was asked
    - **Recommended Outcome** — The tribunal's answer in 3-5 bullet points
    - **How We Got Here** — Narrative of advocate positions, turning points, judicial opinions, and key evidence
@@ -689,12 +689,12 @@ The AI Council Framework's [anti-sycophancy protocols](https://github.com/focusl
 | **Evidence-Required Position Changes** | Social sycophancy — changing position to agree without genuine reasoning | Any `position_changed: true` in a debate round **must** include a non-trivial `evidence` field. "Member-B made a compelling argument" is rejected; specific evidence is required. |
 | **Confidence Scoring (0-100)** | False certainty — models stating positions with unwarranted confidence | Every position includes a numeric confidence score. Scores are tracked across rounds. A model that jumps from 40% to 95% confidence in one round triggers a flag. |
 | **Confidence-Weighted Voting** | Tyranny of the majority — 3 low-confidence agrees outweighing 1 high-confidence disagree | Consensus calculation weights positions by confidence: a 90% confidence disagree carries more weight than a 55% confidence agree. |
-| **3-Round Debate Limit (THOROUGH)** | Sycophancy through exhaustion — models agree just to end the debate | Hard stop after 3 rounds at THOROUGH depth. Higher tiers extend to 5 (RIGOROUS/EXHAUSTIVE) or 7 (NUCLEAR) with additional safeguards. See [Position Stability & Sycophantic Drift Detection](#position-stability--sycophantic-drift-detection). |
+| **3-Round Debate Limit (T3)** | Sycophancy through exhaustion — models agree just to end the debate | Hard stop after 3 rounds at T3 depth. Higher tiers extend to 5 (T4/T5) or 7 (T6) with additional safeguards. See [Position Stability & Sycophantic Drift Detection](#position-stability--sycophantic-drift-detection). |
 | **Position Stability Tracking** | Undetected sycophantic drift — models silently abandoning positions across rounds | Every debate response includes a self-reported 1–5 stability score. Scores are tracked per-advocate per-round and compiled into a scorecard for judges. Based on Kelley & Riedl (2026). |
 | **Advisor Role Framing** | Peer-pressure sycophancy — models capitulate when framed as equals | All advocate prompts frame the model as a "senior expert advisor" rather than a peer. Kelley & Riedl (2026) showed advisory framing strengthens epistemic independence under personalized challenge. |
 | **Affective/Epistemic Convergence Analysis** | False convergence — models change tone without changing position, or vice versa | judicial prompts explicitly instruct judges to distinguish affective alignment (tone change) from epistemic alignment (position change). Based on Kelley & Riedl (2026). |
 | **Sycophantic Drift Warning** | Gradual position abandonment under sustained challenge | Defend prompts include explicit warning: "Do NOT abandon your position merely because it was challenged." Cites Kelley & Riedl research directly in the prompt. |
-| **Mid-Debate Judicial Checkpoint (NUCLEAR)** | Late-round sycophantic collapse — positions crumbling in rounds 5+ | At NUCLEAR depth, judges review progress after round 4 with full stability data, intervening before the highest-risk sycophancy window (rounds 5–7). |
+| **Mid-Debate Judicial Checkpoint (T6)** | Late-round sycophantic collapse — positions crumbling in rounds 5+ | At T6 depth, judges review progress after round 4 with full stability data, intervening before the highest-risk sycophancy window (rounds 5–7). |
 | **Fresh Eyes Validator** | Groupthink — all debating models converge on a shared wrong assumption | An independent model reviews only the final output with zero debate context, catching errors the group normalized. |
 | **Protected Minority Positions** | Minority suppression — valid dissent getting averaged away in synthesis | Minority positions are explicitly preserved in the synthesis, not dropped. The user sees both the consensus AND the dissent with reasoning. |
 | **"What Would Change My Mind"** | Unfalsifiable positions — models stating positions that can't be challenged | Every debate response must include a specific, falsifiable condition. This forces intellectual honesty and gives other models a concrete target. |
@@ -719,7 +719,7 @@ Kelley & Riedl (2026) studied how LLMs respond to sustained challenges across mu
 
 2. **Affective vs. epistemic alignment.** Models can appear to converge by changing their *tone* (affective alignment: "I appreciate your perspective, and you make a great point...") while actually abandoning their *position* (epistemic alignment: switching from opposing to supporting). Judges must distinguish between these two signals. A model that sounds more agreeable but maintains its position is showing genuine engagement, not sycophancy. A model that maintains a combative tone but silently flips its conclusion is performing epistemic surrender disguised as debate.
 
-3. **Multi-turn debate accelerates sycophancy.** With personalized rebuttals, position flip rates reach ~80% by round 10. Rounds 3–5 are the "interesting zone" where genuine deliberation occurs. Beyond round 5, the signal-to-sycophancy ratio degrades rapidly. This directly informed the depth tier round limits: THOROUGH caps at 3, RIGOROUS/EXHAUSTIVE at 5, and NUCLEAR extends to 7 only with a mid-debate judicial checkpoint at round 4 to catch drift before it compounds.
+3. **Multi-turn debate accelerates sycophancy.** With personalized rebuttals, position flip rates reach ~80% by round 10. Rounds 3–5 are the "interesting zone" where genuine deliberation occurs. Beyond round 5, the signal-to-sycophancy ratio degrades rapidly. This directly informed the depth tier round limits: T3 caps at 3, T4/T5 at 5, and T6 extends to 7 only with a mid-debate judicial checkpoint at round 4 to catch drift before it compounds.
 
 ### Implementation: Position Stability Tracking
 
@@ -737,7 +737,7 @@ The orchestrator extracts these scores from each debate round response using pat
 
 ### Position Stability Scorecard
 
-At EXHAUSTIVE+ depth, the orchestrator generates a **Position Stability Scorecard** that is injected into the judicial prompt. This gives judges objective data about how advocates' conviction evolved:
+At T5+ depth, the orchestrator generates a **Position Stability Scorecard** that is injected into the judicial prompt. This gives judges objective data about how advocates' conviction evolved:
 
 ```markdown
 ## Position Stability Scorecard
@@ -765,7 +765,7 @@ The scorecard flags concerning patterns:
 
 ### Judicial Prompt Integration
 
-Judges at EXHAUSTIVE+ depth receive the position stability scorecard alongside the anonymized submissions. Their prompt explicitly instructs them to:
+Judges at T5+ depth receive the position stability scorecard alongside the anonymized submissions. Their prompt explicitly instructs them to:
 
 > *"Kelley & Riedl (2026) showed that models can appear to converge by changing tone (affective alignment) while actually maintaining or abandoning their position (epistemic alignment). You MUST distinguish between these. A model that sounds more agreeable but holds its ground is engaging genuinely. A model that maintains combative language but silently flips its conclusion is performing epistemic surrender."*
 
@@ -941,7 +941,7 @@ export XAI_API_KEY="xai-..."               # Grok models
 export MISTRAL_API_KEY="..."                # Mistral models
 
 # Council configuration
-export AI_COUNCIL_DEFAULT_DEPTH="THOROUGH"  # Default depth level
+export AI_COUNCIL_DEFAULT_DEPTH="T3"        # Default depth level
 export AI_COUNCIL_TIMEOUT="120"             # Per-model timeout in seconds
 export AI_COUNCIL_LOG_DIR="./council-sessions"  # Where session logs are written
 ```
@@ -953,7 +953,7 @@ For finer control, the skill reads an optional `tribunal-config.yaml` in the pro
 ```yaml
 # tribunal-config.yaml
 
-default_depth: THOROUGH
+default_depth: T3
 
 # Model pool: all available models for tribunal selection
 models:
@@ -1001,31 +1001,31 @@ fresh_eyes:
 
 # Depth level overrides (defaults shown)
 depth_levels:
-  QUICK:
+  T1:
     models: 2
     debate_rounds: 0
     consensus_target: 0.50
     estimated_time: "1-2 min"
-    
-  BALANCED:
+
+  T2:
     models: 3
     debate_rounds: 1
     consensus_target: 0.66
     estimated_time: "3-5 min"
-    
-  THOROUGH:
+
+  T3:
     models: 4
     debate_rounds: 3       # Max, may exit early on convergence
     consensus_target: 0.80
     estimated_time: "10-15 min"
-    
-  RIGOROUS:
+
+  T4:
     models: 4
     debate_rounds: 3
     consensus_target: 0.90
     estimated_time: "18-25 min"
-    
-  EXHAUSTIVE:
+
+  T5:
     models: 5              # Uses all available (up to 5)
     debate_rounds: 3       # Still capped at 3 (anti-sycophancy)
     consensus_target: 0.95
@@ -1042,14 +1042,14 @@ cost:
 
 | Depth | Models | Max Debate Rounds | Mid-Debate Checkpoint | Stability Audit | Fresh Eyes | Consensus Target | Estimated Cost | Best For |
 |-------|--------|------------------|----------------------|-----------------|------------|------------------|---------------|----------|
-| **QUICK** | 2 | 0 | — | No | No | 50%+ | ~$0.10 | Quick sanity checks, simple questions |
-| **BALANCED** | 3 | 1 | — | No | No | 66%+ | ~$0.50 | Standard tasks, routine decisions |
-| **THOROUGH** | 4 | 3 | — | No | No | 80%+ | ~$2.00 | Important deliverables, client-facing work |
-| **RIGOROUS** | 4 | 5 | — | No | No | 90%+ | ~$5.00 | Architecture decisions, security reviews |
-| **EXHAUSTIVE** | 5 | 5 | — | Yes | Yes | 95%+ | ~$10.00 | Mission-critical, high-stakes decisions |
-| **NUCLEAR** | 5 | 7 | After R4 | Yes | Yes | 95%+ | ~$15.00 | Maximum rigor, adversarial-grade validation |
+| **T1** | 2 | 0 | — | No | No | 50%+ | ~$0.10 | Quick sanity checks, simple questions |
+| **T2** | 3 | 1 | — | No | No | 66%+ | ~$0.50 | Standard tasks, routine decisions |
+| **T3** | 4 | 3 | — | No | No | 80%+ | ~$2.00 | Important deliverables, client-facing work |
+| **T4** | 4 | 5 | — | No | No | 90%+ | ~$5.00 | Architecture decisions, security reviews |
+| **T5** | 5 | 5 | — | Yes | Yes | 95%+ | ~$10.00 | Mission-critical, high-stakes decisions |
+| **T6** | 5 | 7 | After R4 | Yes | Yes | 95%+ | ~$15.00 | Maximum rigor, adversarial-grade validation |
 
-> **Note on round limits:** The round counts above reflect Kelley & Riedl (2026) findings that multi-turn debate accelerates sycophantic convergence. Rounds 3–5 are the "interesting zone" where genuine deliberation occurs; beyond that, flip rates climb steeply. THOROUGH caps at 3 rounds (the original AI Council Framework recommendation). RIGOROUS and EXHAUSTIVE extend to 5 rounds within the interesting zone. NUCLEAR pushes to 7 but only with a mid-debate judicial checkpoint at round 4 that catches sycophantic drift before the highest-risk rounds. EXHAUSTIVE and NUCLEAR also include a Position Stability Audit that gives judges quantitative drift data, plus a Fresh Eyes validation phase.
+> **Note on round limits:** The round counts above reflect Kelley & Riedl (2026) findings that multi-turn debate accelerates sycophantic convergence. Rounds 3–5 are the "interesting zone" where genuine deliberation occurs; beyond that, flip rates climb steeply. T3 caps at 3 rounds (the original AI Council Framework recommendation). T4 and T5 extend to 5 rounds within the interesting zone. T6 pushes to 7 but only with a mid-debate judicial checkpoint at round 4 that catches sycophantic drift before the highest-risk rounds. T5 and T6 also include a Position Stability Audit that gives judges quantitative drift data, plus a Fresh Eyes validation phase.
 
 ---
 
@@ -1069,14 +1069,14 @@ The user is building a system prompt for a customer support agent. They want it 
 
 #### Phase 1: Briefing (Automatic)
 
-The host agent parses the request and auto-selects **THOROUGH** depth (4 models, up to 3 debate rounds). It writes the briefing:
+The host agent parses the request and auto-selects **T3 (Deep Review)** depth (4 models, up to 3 debate rounds). It writes the briefing:
 
 ```markdown
 # Tribunal Session: tribunal-20260228-185500
 
 ## Task Briefing
 Task Type: prompt_engineering
-Depth: THOROUGH
+Depth: T3
 Models: Claude Sonnet, GPT-5, Gemini Pro, DeepSeek R1
 Fresh Eyes: Claude Sonnet (separate instance)
 
@@ -1152,7 +1152,7 @@ Member-C: 85% → 82% (accepts structured output concern)
 Member-D: 70% → 78% (synthesizes best elements from A and C)
 ```
 
-**Round 2:** Convergence. All models agree on a merged approach: Member-C's empathy framework + Member-A's structured output + Member-B's escalation matrix + Member-D's multi-language handling. Agreement score: 0.88 (exceeds 0.80 THOROUGH target). Debate exits.
+**Round 2:** Convergence. All models agree on a merged approach: Member-C's empathy framework + Member-A's structured output + Member-B's escalation matrix + Member-D's multi-language handling. Agreement score: 0.88 (exceeds 0.80 T3 target). Debate exits.
 
 #### Phase 5: Synthesis
 
@@ -1302,7 +1302,7 @@ The debrief report ("sitrep") is the meta-document that tells the user not just 
 | 4 | **Streaming vs. batch responses?** | (a) Wait for all responses, (b) Stream progress to user | Start with (a) for simplicity. Add (b) later — show a progress indicator: "Member-A submitted... Member-B submitted..." |
 | 5 | **Where do council logs live?** | (a) Project directory, (b) Global directory, (c) Configurable | (c) — Default to `./council-sessions/` in project root, configurable via `AI_COUNCIL_LOG_DIR`. |
 | 6 | **Cost estimation before execution?** | (a) Just run it, (b) Estimate and confirm | (b) — Before dispatching API calls, estimate token cost based on briefing length × model count × expected rounds. Confirm with user if above threshold. |
-| 7 | **The Anonymization-Routing Conflict** | (a) Route first then anonymize, (b) Anonymize first then route, (c) No pre-debate routing | **CAUTION.** Identified by Justice DeepSeek R1 during Architecture Best Practices session: any pre-debate routing or triage layer (embedding-based classification, complexity scoring) operates on raw task input BEFORE anonymization occurs. This creates two risks: (1) routing metadata (topic sensitivity, complexity flags) could leak to judges as side-channel information, biasing their judgment; (2) if routing uses model-generated content, it could reveal advocate identity. **Current ruling: (c) until proven safe.** Routing must remain deterministic and metadata-free. If we later add pre-triage, it must be architecturally isolated from the anonymization pipeline — the router's output must be a single enum (QUICK/BALANCED/THOROUGH/etc.), never richer metadata that reaches judges. |
+| 7 | **The Anonymization-Routing Conflict** | (a) Route first then anonymize, (b) Anonymize first then route, (c) No pre-debate routing | **CAUTION.** Identified by Justice DeepSeek R1 during Architecture Best Practices session: any pre-debate routing or triage layer (embedding-based classification, complexity scoring) operates on raw task input BEFORE anonymization occurs. This creates two risks: (1) routing metadata (topic sensitivity, complexity flags) could leak to judges as side-channel information, biasing their judgment; (2) if routing uses model-generated content, it could reveal advocate identity. **Current ruling: (c) until proven safe.** Routing must remain deterministic and metadata-free. If we later add pre-triage, it must be architecturally isolated from the anonymization pipeline — the router's output must be a single enum (T1/T2/T3/etc.), never richer metadata that reaches judges. |
 
 ### Phased Build Plan
 
@@ -1311,14 +1311,14 @@ The debrief report ("sitrep") is the meta-document that tells the user not just 
 - [ ] `config_loader.py` — Configuration parsing, env var reading, depth level resolution
 - [ ] Basic `council_orchestrator.py` — Sequential (not yet parallel) dispatch, collection, and naive synthesis
 - [ ] SKILL.md with correct frontmatter and basic instructions
-- [ ] Test with QUICK depth (2 models, 0 debate rounds) on a simple task
+- [ ] Test with T1 depth (2 models, 0 debate rounds) on a simple task
 
 #### Phase 2: Deliberation Engine (Week 3-4)
 - [ ] `debate_manager.py` — Critique exchange, debate rounds, convergence detection
 - [ ] `consensus_calculator.py` — Confidence-weighted voting, agreement scoring
 - [ ] Structured communication format (full YAML/Markdown hybrid)
 - [ ] Anti-sycophancy controls: evidence requirements, anonymization, position change validation
-- [ ] Test with THOROUGH depth (4 models, debate rounds) on a complex task
+- [ ] Test with T3 depth (4 models, debate rounds) on a complex task
 
 #### Phase 3: Validation & Reporting (Week 5)
 - [ ] `fresh_eyes_validator.py` — Zero-context validation with constructive framing
@@ -1344,7 +1344,7 @@ The debrief report ("sitrep") is the meta-document that tells the user not just 
 
 ### First Milestone
 
-**Build the vertical slice first:** A single end-to-end tribunal session at QUICK depth (2 models, no debate) that produces a real output + basic log. This validates the core architecture (API dispatch, response parsing, synthesis) before adding deliberation complexity. Estimated effort: 2-3 focused days.
+**Build the vertical slice first:** A single end-to-end tribunal session at T1 depth (2 models, no debate) that produces a real output + basic log. This validates the core architecture (API dispatch, response parsing, synthesis) before adding deliberation complexity. Estimated effort: 2-3 focused days.
 
 ---
 
@@ -1395,15 +1395,15 @@ TIMEOUT_PROFILES = {
 }
 ```
 
-**Tribunal adoption:** Our depth levels (QUICK through EXHAUSTIVE) will each carry a timeout profile:
+**Tribunal adoption:** Our depth levels (T1 through T5) will each carry a timeout profile:
 
 ```python
 TIMEOUT_PROFILES = {
-    "QUICK":      {"global": 120,  "per_model": 30,  "debate_round": 0,   "synthesis": 30},
-    "BALANCED":   {"global": 300,  "per_model": 60,  "debate_round": 60,  "synthesis": 60},
-    "THOROUGH":   {"global": 900,  "per_model": 90,  "debate_round": 90,  "synthesis": 90},
-    "RIGOROUS":   {"global": 1500, "per_model": 120, "debate_round": 120, "synthesis": 120},
-    "EXHAUSTIVE": {"global": 2700, "per_model": 180, "debate_round": 180, "synthesis": 180},
+    "T1": {"global": 120,  "per_model": 30,  "debate_round": 0,   "synthesis": 30},
+    "T2": {"global": 300,  "per_model": 60,  "debate_round": 60,  "synthesis": 60},
+    "T3": {"global": 900,  "per_model": 90,  "debate_round": 90,  "synthesis": 90},
+    "T4": {"global": 1500, "per_model": 120, "debate_round": 120, "synthesis": 120},
+    "T5": {"global": 2700, "per_model": 180, "debate_round": 180, "synthesis": 180},
 }
 ```
 
@@ -1425,7 +1425,7 @@ sys.stderr.flush()
 **Tribunal adoption:** Critical for user experience. Our orchestrator will emit progress to stderr at each phase transition:
 
 ```
-[tribunal] Session tribunal-20260228-185500 started (THOROUGH depth)
+[tribunal] Session tribunal-20260228-185500 started (T3 depth)
 [tribunal] Phase 2: Independent work — dispatching to 4 models...
 [tribunal]   ✓ Claude Sonnet submitted (3.2s)
 [tribunal]   ✓ GPT-5 submitted (4.8s)
@@ -1476,7 +1476,7 @@ The `summary` mode is what the SKILL.md directs the host agent to use — the or
 |--------|------------|-----------|
 | [AI Council Framework](https://github.com/focuslead/ai-council-framework) | Structured debate protocol with anti-sycophancy controls, 3-round limit, Fresh Eyes validation | Primary inspiration for deliberation protocol |
 | [last30days-skill](https://github.com/mvanhorn/last30days-skill) | ThreadPoolExecutor parallelism, timeout profiles, cross-platform skill root detection, stderr progress display, `--emit` output modes, openai.yaml Codex compat | Primary inspiration for orchestration engineering patterns (see Appendix A) |
-| Kelley & Riedl (2026), "Sycophantic Drift in Multi-Turn LLM Dialogues" | Advisory role framing strengthens epistemic independence; peer framing destroys it. Affective vs. epistemic alignment distinction. Multi-turn debate accelerates sycophancy — flip rates ~80% by round 10, rounds 3–5 are the "interesting zone." Personalized+ challenges are most dangerous. | Directly informed v0.5.0: advisor prompt framing, position stability tracking, affective/epistemic convergence analysis for judges, depth tier round limits, NUCLEAR mid-debate checkpoint |
+| Kelley & Riedl (2026), "Sycophantic Drift in Multi-Turn LLM Dialogues" | Advisory role framing strengthens epistemic independence; peer framing destroys it. Affective vs. epistemic alignment distinction. Multi-turn debate accelerates sycophancy — flip rates ~80% by round 10, rounds 3–5 are the "interesting zone." Personalized+ challenges are most dangerous. | Directly informed v0.5.0: advisor prompt framing, position stability tracking, affective/epistemic convergence analysis for judges, depth tier round limits, T6 mid-debate checkpoint |
 | DeepSeek-R1 Planner/Verifier pattern | Separate "planner" (generates answers) from "verifier" (challenges them). Verifier must be genuinely adversarial; planner must REVISE not defend when caught. | Implemented in The Tribunal's advocate/judicial split: advocates plan, judges verify adversarially |
 | Northeastern "professional framing" anti-sycophancy research | Framing an LLM in a professional advisory role increases epistemic independence under challenge | Same research group as Kelley & Riedl (2026). Directly implemented in advocate system prompts |
 | [Agent Skills Standard](https://snyk.io/articles/top-claude-skills-developers/) | SKILL.md cross-platform standard adopted by Claude Code, Codex CLI, Gemini CLI, Copilot CLI | Determines skill packaging and distribution format |
@@ -1498,9 +1498,9 @@ Rough per-session estimates assuming average prompt/response sizes:
 | Debate Round 2 (4 models) | 4 | 4 × 8,000 = 32,000 | 4 × 1,500 = 6,000 |
 | Synthesis | 1 | 15,000 | 3,000 |
 | Fresh Eyes | 1 | 5,000 | 1,500 |
-| **TOTAL (THOROUGH)** | **26** | **~132,000** | **~46,500** |
+| **TOTAL (T3)** | **26** | **~132,000** | **~46,500** |
 
-At current API pricing (~$3/M input, ~$15/M output for frontier models), a THOROUGH session costs approximately **$1.10 total** — well under the $5 default cap.
+At current API pricing (~$3/M input, ~$15/M output for frontier models), a T3 session costs approximately **$1.10 total** — well under the $5 default cap.
 
 ---
 

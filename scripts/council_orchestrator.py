@@ -17,12 +17,12 @@ Phases:
   8. Write output files + debrief + play-by-play narrative + session summary
 
 Depth controls which phases run:
-  QUICK:      Phases 1-3, 8 (no debate, no judges, no summary)
-  BALANCED:   Phases 1-6, 8 (challenge + 1 debate round + 1 Justice + session summary)
-  THOROUGH:   Phases 1-6, 8 (challenge + 3 debate rounds + 2 Justices + 1 Appellate Judge + session summary)
-  RIGOROUS:   Phases 1-6, 8 (challenge + 5 debate rounds + full judicial panel + session summary)
-  EXHAUSTIVE: Phases 1-8   (5 rounds + position-stability audit + Fresh Eyes + session summary)
-  NUCLEAR:    Phases 1-8   (7 rounds + mid-debate judicial checkpoint at R4 + stability audit + Fresh Eyes + session summary)
+  T1 (Spot Check):       Phases 1-3, 8 (no debate, no judges, no summary)
+  T2 (Standard Review):  Phases 1-6, 8 (challenge + 1 debate round + 1 Justice + session summary)
+  T3 (Deep Review):      Phases 1-6, 8 (challenge + 3 debate rounds + 2 Justices + 1 Appellate Judge + session summary)
+  T4 (Full Panel):       Phases 1-6, 8 (challenge + 5 debate rounds + full judicial panel + session summary)
+  T5 (Stress Test):      Phases 1-8   (5 rounds + position-stability audit + Fresh Eyes + session summary)
+  T6 (Red Team):         Phases 1-8   (7 rounds + mid-debate judicial checkpoint at R4 + stability audit + Fresh Eyes + session summary)
 """
 from __future__ import annotations
 
@@ -41,7 +41,6 @@ from typing import Optional
 # Add script directory to path for sibling imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from data_room_enricher import enrich_briefing, verify_advocate_claims
 from config_loader import (
     load_config, ConclaveConfig, DepthConfig, ModelDef,
     BISHOPS, PRIESTS, DEACONS,
@@ -66,13 +65,45 @@ Your job is to produce the BEST possible response to the task below. Other exper
 received the same task independently. Your submission will be anonymized and evaluated
 by impartial judges on The Bench.
 
-## Data Room Notice
-The briefing may include a Data Room with pre-gathered research, financial data,
-legal cases, or web search results. This data is provided as OPTIONAL CONTEXT —
-it may or may not be relevant to the question. Do not anchor on it. Do not assume
-the Data Room defines the scope of the question. Use it where genuinely helpful,
-ignore it where it isn't, and draw on your own knowledge and reasoning beyond it.
-The Data Room is a starting point, not the answer.
+## Stance Commitment
+
+If the briefing asks a directional question ("is this different?", "should we
+do X?", "which is better?", "will Y happen?"), or requests your opinion, thoughts,
+or position, you MUST:
+- Open your Hypothesis with a clear, unambiguous directional answer
+  (YES/NO/X-is-better/Y-will-happen). Not "it depends on several factors."
+- Take a STRONG position and defend it. Hedging belongs in Counterargument
+  Acknowledgment, not in your Hypothesis.
+- If the evidence genuinely splits 50/50, say which side you lean toward and why.
+  "The evidence is mixed" is not a position. "The evidence is mixed but favors X
+  because [reason]" is a position.
+
+The judges will penalize fence-sitting. A wrong-but-defended position that teaches
+something is worth more than a hedge that commits to nothing.
+
+## Depth Over Breadth
+
+Go deep, not wide. Surface-level analysis listing many factors without exploring
+any is worth less than deep analysis of 2-3 critical factors with specific
+evidence, mechanisms, and implications.
+
+WEAK: "Several factors will influence the outcome, including demand elasticity,
+regulatory frameworks, and technological capability."
+STRONG: "Demand elasticity is the decisive factor. Here is why: [specific
+mechanism]. Historical parallel: when X happened, demand expanded by Y%
+over Z years because [causal chain]. Applied to AI: [specific projection
+with reasoning]."
+
+The judges reward analytical depth — drilling into HOW and WHY — over
+comprehensive surface coverage.
+
+## Structure of the Ask
+
+IMPORTANT: If the briefing specifies numbered deliverables, structured questions,
+or explicit pillars (e.g., "(1) position, (2) reasoning, (3) scenarios"), you
+MUST address each one explicitly and in order. Label your responses to match the
+structure of the ask. Omitting or reordering a requested deliverable is grounds
+for the judges to penalize your submission.
 
 ## Submission Format
 
@@ -80,6 +111,7 @@ Structure your response as:
 
 ### Hypothesis
 One clear, falsifiable sentence about your approach or recommendation.
+This MUST be a directional claim, not a conditional framework.
 
 ### Evidence
 3-5 pieces of supporting proof. For each:
@@ -232,6 +264,12 @@ CRITICAL RULES FROM THE RESEARCH:
   but" or "I see where you're coming from" out of courtesy rather than genuine
   agreement, delete it. Hedging out of politeness is indistinguishable from
   epistemic surrender. Say what you actually think.
+- GO DEEP: When defending your position, don't just repeat your top-level claim.
+  Drill into the MECHANISM. If you claim Jevons Paradox will hold, explain the
+  specific demand curve, the specific new job categories, the specific historical
+  analogy with quantitative parallels. Surface-level defenses are weak defenses.
+  The judges reward depth over breadth. One well-defended claim with specific
+  evidence beats five shallow assertions.
 
 Intellectual honesty is the only currency that matters here."""
 
@@ -267,10 +305,18 @@ Who argued well? Who crumbled under pressure? Who showed intellectual honesty?
 | Advocate-X | [assessment] | [yes/no] | [yes/no] | [strong/weak] |
 
 ### Fact-Check Results
-For each advocate, assess their key claims:
-| Advocate | Claim | Verdict | Notes |
-|----------|-------|---------|-------|
-| Advocate-X | [claim] | ✓ Verified / ⚠ Unverifiable / ✗ Incorrect | [detail] |
+For each advocate, assess their key claims. Tag each claim's evidence quality
+to indicate the type of support offered:
+- `PRIMARY_SOURCE` — original data, official statistics, direct measurement
+- `PEER_REVIEWED` — published in peer-reviewed journals
+- `SECONDARY` — reputable secondary reporting (textbooks, review articles, quality journalism)
+- `ANECDOTAL` — single case studies, personal experience, one-off examples
+- `EXPERT_OPINION` — stated by a recognized authority but without cited data
+- `UNATTRIBUTED` — no source given; assertion presented as fact
+
+| Advocate | Claim | Evidence Quality | Verdict | Notes |
+|----------|-------|-----------------|---------|-------|
+| Advocate-X | [claim] | [quality tag] | ✓ Verified / ⚠ Unverifiable / ✗ Incorrect | [detail] |
 
 ### Framework Provenance Audit
 If any advocate introduced a named framework, coefficient, metric, or theory,
@@ -314,6 +360,22 @@ Rank the submissions from strongest to weakest AFTER debate:
 
 Choose ONE of **ACCEPT**, **SYNTHESIZE**, or **REMAND**.
 
+**Guidance on verdict selection:**
+- **Prefer ACCEPT** when one advocate's position is clearly stronger AND their
+  framework subsumes the valid points from other advocates. Do not SYNTHESIZE
+  out of diplomatic impulse — if one advocate won the debate, say so.
+- **SYNTHESIZE** only when multiple advocates contributed genuinely distinct,
+  non-overlapping insights that must be combined to answer the question. "Taking
+  the best from everyone" is not synthesis — it's diplomatic avoidance. Real
+  synthesis produces a position that no individual advocate held, built from
+  incompatible-but-partially-correct components.
+- **REMAND** when the evidence is genuinely insufficient to rule.
+
+**Directional questions demand directional verdicts.** If the briefing asked
+"is X different?", "should we do Y?", or "which approach is better?", your
+verdict MUST answer that question directly. A verdict that restates conditions
+without answering the question is a judicial failure.
+
 Then fill in the structured verdict table below. You MUST have one row per
 advocate. Every advocate gets an explicit ruling — no one is silently ignored.
 
@@ -354,6 +416,92 @@ For each: state the question, why it matters, and your confidence level (e.g.,
 "I'm ~60% that X is true because [reason]").
 
 Be the skeptic the council needs. Your judgment must be earned, not assumed."""
+
+
+MAJORITY_OPINION_SYSTEM_PROMPT = """\
+You are the Chief Justice writing the Opinion of the Court in a Tribunal
+deliberation. You have read all individual judicial opinions rendered by
+the judges on The Bench.
+
+Your job is to reconcile those opinions into a SINGLE, canonical ruling.
+You must NOT introduce new analysis, new evidence, or new reasoning that
+does not appear in at least one judicial opinion. You are a synthesizer,
+not a new judge.
+
+## Process
+
+1. **Identify unanimous points** — where all (or nearly all) judges agree.
+2. **Identify split decisions** — where judges disagree. Count votes. The
+   majority position wins.
+3. **Resolve conflicts** — when judges recommend contradictory actions,
+   go with the majority. Note the minority view briefly.
+
+## Output Format
+
+### Verdict
+
+State ONE of: **ACCEPT [Advocate-X]**, **SYNTHESIZE**, or **REMAND**.
+This must reflect the majority of judicial opinions, not your own preference.
+
+### Bottom Line
+
+One to three sentences that DIRECTLY ANSWER the question asked in the briefing.
+If the briefing asked "is X different?", start with "Yes", "No", or "Partially"
+and explain. If it asked "which approach?", name the approach. If it asked for
+a recommendation, state it. This must be a clear, directional statement — not
+a framework, not conditions, not "it depends." Caveats come AFTER.
+
+### Deliverable
+
+The detailed, substantive answer to the user's question. Write this as a
+clean consulting memo / analysis / recommendation — NOT as a judicial opinion.
+Do NOT use phrases like "The Court recommends", "The Court finds", or
+"The tribunal concludes." Write in direct analytical voice: "The recommended
+approach is...", "The primary risk is...", "The evidence supports...".
+
+Go deep: explain the mechanisms, the evidence, the specific implications.
+Do not just state conclusions — explain WHY with reference to the strongest
+evidence from the deliberation.
+
+If the original briefing contained numbered deliverables or structured
+pillars, mirror that structure here. Each pillar should receive substantive
+analysis, not just a summary conclusion.
+
+### Fact-Check Summary
+
+A merged table of key claims that were verified, corrected, or rejected
+across all judicial opinions. Deduplicate — if 3 judges verified the same
+claim, list it once. Format:
+
+| Claim | Verdict | Source |
+|-------|---------|--------|
+
+### Unanimous Points
+
+Bullet list of positions where all or nearly all judges agreed.
+
+### Contested Points
+
+For each point where judges split:
+- **Issue**: What was contested
+- **Majority position** (N-M vote): What the majority ruled
+- **Minority view**: What the dissenting judge(s) argued
+
+### Unresolved Questions
+
+Deduplicated list of questions that remain open after deliberation, with
+confidence levels where judges provided them. Format each as:
+- **Question**: [The question]
+- **Why it matters**: [Brief explanation]
+- **Confidence**: [Highest confidence estimate from any judge]
+
+## Rules
+- Do NOT add your own analysis. Only reconcile existing opinions.
+- Do NOT drop elements that the majority of judges included.
+- Do NOT introduce elements that no judge mentioned.
+- If all judges agree, say so — don't manufacture disagreement.
+- Write the Deliverable in clean analytical voice, not judicial voice.
+- Keep it under 4000 words."""
 
 
 DISSENT_SYSTEM_PROMPT = """\
@@ -401,8 +549,9 @@ FRESH_EYES_SYSTEM_PROMPT = """\
 You are the Fresh Eyes reviewer in a Tribunal deliberation. You have NOT seen any
 of the debate. You are seeing the FINAL output for the first time.
 
-Your job is to be the last line of defense — a sanity check before the result
-is delivered to the user.
+Your job is to be the last line of defense — a rigorous sanity check before the
+result is delivered to the user. You check for clarity, completeness, logical
+soundness, and evidence-claim alignment.
 
 ## What you receive
 - The original briefing (the question)
@@ -412,6 +561,7 @@ is delivered to the user.
 
 ### First Impression
 What does this output look like to someone seeing it cold? Is it clear? Complete?
+Does it read as authoritative or hedged? Would a domain expert find it credible?
 
 ### Red Flags
 Anything that seems:
@@ -420,16 +570,110 @@ Anything that seems:
 - Confusing or contradictory
 - Over-confident without evidence
 
+### Logical Fallacy Scan
+
+Check the output for these specific fallacies. For each one found, cite the
+passage and rate severity (HIGH = undermines a core conclusion, LOW = minor
+rhetorical issue that doesn't affect the substance).
+
+| # | Fallacy | Present? | Passage | Severity | Impact on Conclusion |
+|---|---------|----------|---------|----------|---------------------|
+| 1 | False Cause (correlation ≠ causation) | YES/NO | [quote or "—"] | HIGH/LOW/— | [how it affects the output] |
+| 2 | Circular Reasoning | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+| 3 | Cherry-Picking (selective evidence) | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+| 4 | Appeal to Authority (unqualified or irrelevant) | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+| 5 | Straw Man (misrepresenting a position) | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+| 6 | False Dichotomy (only two options presented) | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+| 7 | Hasty Generalization (small sample → broad claim) | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+| 8 | Slippery Slope (chain of unlikely consequences) | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+| 9 | Ad Hominem (attacking the source, not the argument) | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+| 10 | Equivocation (shifting meaning of a key term) | YES/NO | [quote or "—"] | HIGH/LOW/— | |
+
+If no fallacies are found, state "No logical fallacies detected" and leave
+the table with all NO entries.
+
+### Evidence-Claim Alignment
+
+For each major conclusion in the output, assess whether it is adequately
+supported by the evidence actually cited (not just plausible in the abstract).
+
+| # | Conclusion | Evidence Cited | Alignment | Explanation |
+|---|-----------|---------------|-----------|-------------|
+| 1 | [conclusion from output] | [what evidence supports it] | STRONG/WEAK/MISSING | [why] |
+
+- **STRONG**: Conclusion follows logically from cited evidence
+- **WEAK**: Some evidence exists but gaps remain, or the leap is too large
+- **MISSING**: Conclusion is stated without any supporting evidence
+
+### Unsupported Assertions
+
+List any factual claims presented as established truth with no evidence,
+citation, or reasoning to back them up:
+- "[claim]" — no evidence provided
+- (If none found, state "No unsupported assertions detected.")
+
 ### Completeness Check
-Does this output actually answer the original question? Fully?
+Does this output actually answer the original question? Fully? Are there
+obvious angles or considerations that were missed entirely?
 
 ### Final Verdict
 One of:
-- **APPROVE**: Ship it. The output is sound.
-- **FLAG [issue]**: There's a specific problem that should be noted to the user.
-- **REJECT**: The output has a fundamental flaw. (Explain what.)
+- **APPROVE**: Ship it. The output is logically sound and well-supported.
+- **FLAG-HIGH [issue]**: A significant logical or evidentiary problem that
+  materially affects the conclusion. The user should be warned.
+- **FLAG-LOW [issue]**: A minor issue (rhetorical weakness, small gap) that
+  the user should be aware of but that doesn't undermine the core output.
+- **REJECT**: The output has a fundamental flaw — unsound reasoning, missing
+  evidence for a core claim, or a logical fallacy that invalidates a key
+  conclusion. (Explain what.)
 
-You are the user's last advocate. Be honest about what you see."""
+You are the user's last advocate. Be honest, systematic, and precise."""
+
+
+CLAIM_EXTRACTION_SYSTEM_PROMPT = """\
+You are an analytical reviewer extracting a structured claim-evidence matrix
+from a Tribunal deliberation record. Your job is to identify every significant
+factual claim made during the session and trace how it fared through the
+adversarial process.
+
+## What you receive
+- The original briefing (question)
+- Advocate submissions (initial positions)
+- Challenge round (advocates questioning each other)
+- Debate rounds (adversarial exchange)
+- Judicial opinions (judges evaluating claims)
+
+## Output Format
+
+Produce a markdown table with 10-25 rows, ordered by importance to the final
+conclusion (most important first):
+
+| # | Claim | Source | Evidence Cited | Evidence Quality | Judge Verification | Survived Debate |
+|---|-------|--------|---------------|-----------------|-------------------|----------------|
+| 1 | [specific factual claim] | [Advocate-X] | [what evidence they cited] | [quality tag] | [what judges said] | ✓ Yes / ✗ No / ⚠ Contested |
+
+**Evidence Quality tags** (use exactly these):
+- `PRIMARY_SOURCE` — original data, official statistics, direct measurement
+- `PEER_REVIEWED` — published in peer-reviewed journals
+- `SECONDARY` — reputable secondary reporting (textbooks, review articles)
+- `ANECDOTAL` — single case studies, personal experience
+- `EXPERT_OPINION` — stated by a recognized authority without cited data
+- `UNATTRIBUTED` — no source given; assertion presented as fact
+- `NONE` — no evidence offered at all
+
+**Survived Debate** means the claim was either:
+- ✓ **Yes**: Not challenged, or challenged and successfully defended
+- ✗ **No**: Challenged and the advocate conceded or abandoned it
+- ⚠ **Contested**: Challenged but neither side conclusively won
+
+## Rules
+- Only include claims that are factual assertions (not opinions, frameworks, or recommendations)
+- If a claim was made by multiple advocates, credit the first to make it
+- If judges explicitly verified or disputed a claim, note their finding
+- If no judge addressed a claim, write "Not reviewed" in Judge Verification
+- End with a one-line summary: "X of Y claims supported by strong evidence; Z unattributed."
+
+Be precise. This matrix is the evidentiary backbone of the session record."""
 
 
 # ---------------------------------------------------------------------------
@@ -486,6 +730,7 @@ def _slugify_briefing(briefing: str, max_words: int = 5) -> str:
         "tribunal briefing", "briefing", "task", "context",
         "deliverable", "task type", "overview", "background",
         "summary", "introduction", "question",
+        "data room", "supplementary context", "enrichment",
     }
 
     # Collect candidate lines, prioritizing "Question:" lines which
@@ -503,6 +748,15 @@ def _slugify_briefing(briefing: str, max_words: int = 5) -> str:
         label = re.sub(r'[*_`:\s]', '', stripped).lower()
         if label in _SKIP_HEADERS:
             continue
+        # Skip Data Room disclaimer and other meta-instruction lines
+        lower = stripped.lower()
+        if any(phrase in lower for phrase in (
+            "the following data was gathered",
+            "may or may not be relevant",
+            "supplementary context",
+            "do not anchor on this data",
+        )):
+            continue
         # Prefer lines that start with "Question:" — they're the real topic
         if re.match(r'^\*{0,2}question\*{0,2}\s*:', stripped, re.IGNORECASE):
             question_line = re.sub(r'^\*{0,2}question\*{0,2}\s*:\s*', '', stripped, flags=re.IGNORECASE)
@@ -511,8 +765,18 @@ def _slugify_briefing(briefing: str, max_words: int = 5) -> str:
         return ""
 
     first_line = question_line if question_line else candidates[0]
-    # Take first sentence (split on . ? !) then first N words
-    sentence = re.split(r'[.?!]', first_line)[0].strip()
+    # Strip header-style prefixes from the line itself
+    # (handles "Tribunal Briefing: actual topic" on a single line)
+    for hdr in ("tribunal briefing:", "briefing:"):
+        if first_line.lower().startswith(hdr):
+            first_line = first_line[len(hdr):].strip()
+            break
+    # Take first sentence, but if it's short (≤4 real words after cleaning),
+    # grab the next sentence fragment too (handles "Is X? Y and Z" patterns)
+    fragments = re.split(r'[.?!]', first_line)
+    sentence = fragments[0].strip()
+    if len(re.sub(r'[^a-z\s]', '', sentence.lower()).split()) <= 4 and len(fragments) > 1:
+        sentence = sentence + " " + fragments[1].strip()
     cleaned = re.sub(r'[^a-z0-9\s]', '', sentence.lower()).strip()
     # Strip common question/filler prefixes so the slug is topical
     prefixes = [
@@ -521,19 +785,25 @@ def _slugify_briefing(briefing: str, max_words: int = 5) -> str:
         "what is the best approach for ", "what is the best method to ",
         "what is the best ", "what are the best ",
         "what is the ", "what are the ", "what is ", "what are ",
-        "is it better to use ", "is it better to ",
+        "is this time different for ", "is this time different ",
+        "is this time ", "this time is different for ", "this time is different ",
+        "is it better to use ", "is it better to ", "is it true that ",
+        "is there ", "are there ",
         "how should we ", "how should i ", "how do we ", "how do i ",
-        "how to ", "how can we ", "how can i ",
+        "how to ", "how can we ", "how can i ", "how will ",
         "can we ", "can i ", "can you ",
         "write a ", "write an ", "create a ", "create an ",
         "review this ", "review the ", "review our ",
-        "compare ", "evaluate ",
+        "compare ", "evaluate ", "analyze ", "analyse ",
+        "design a ", "design an ", "build a ", "build an ",
         "a home user has ", "a home user with ", "a home user ",
         "a user has ", "a user with ", "a user ",
         "the user has ", "the user wants to ", "the user ",
         "i have ", "i want to ", "i need to ", "i would like to ",
         "we have ", "we want to ", "we need to ",
         "given that ", "assuming ", "considering ",
+        "when will ", "when does ", "when do ",
+        "will the ", "will ai ", "will ",
         "has ", "with ",
     ]
     for prefix in prefixes:
@@ -543,7 +813,8 @@ def _slugify_briefing(briefing: str, max_words: int = 5) -> str:
     words = cleaned.split()
     # Remove stopwords and "tribunal" (avoid dup with session-id prefix)
     _STOPWORDS = {
-        "tribunal", "a", "an", "the", "of", "to", "in", "on", "for",
+        "tribunal", "briefing", "task", "question",
+        "a", "an", "the", "of", "to", "in", "on", "for",
         "is", "are", "was", "were", "be", "been", "being",
         "each", "every", "all", "any", "some", "our", "my", "your",
         "their", "its", "this", "that", "these", "those",
@@ -553,6 +824,11 @@ def _slugify_briefing(briefing: str, max_words: int = 5) -> str:
         "will", "would", "could", "should", "may", "might",
         "wants", "want", "need", "needs",
         "set", "up", "get", "got",
+        "most", "important", "things", "best",
+        "like", "just", "about", "between", "over", "more",
+        "really", "actually", "currently", "using",
+        "way", "based", "given", "know", "one",
+        "turning", "three", "two", "four", "five",
     }
     words = [w for w in words if w not in _STOPWORDS]
     slug = "-".join(words[:max_words])
@@ -561,16 +837,17 @@ def _slugify_briefing(briefing: str, max_words: int = 5) -> str:
 
 
 def generate_session_id(briefing: Optional[str] = None) -> str:
-    """Create a session ID like ``tribunal-rust-vs-go-cli-20260302-223614``.
+    """Create a session ID like ``20260302-rust-vs-go-cli``.
 
-    If *briefing* is provided, a short topical slug is extracted from the
-    first sentence and inserted between the prefix and timestamp.
+    Date-first for natural sorting, no redundant prefix (already inside
+    tribunal-sessions/), tight topical slug.  If a directory with the
+    same name already exists, a short numeric suffix is appended.
     """
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    date = datetime.now().strftime("%Y%m%d")
     slug = _slugify_briefing(briefing) if briefing else ""
     if slug:
-        return f"tribunal-{slug}-{ts}"
-    return f"tribunal-{ts}"
+        return f"{date}-{slug}"
+    return date
 
 
 class SessionDir:
@@ -633,6 +910,12 @@ class SessionDir:
 
 def create_session_dir(base_dir: str, session_id: str) -> SessionDir:
     root = Path(base_dir) / session_id
+    # Handle collisions (same date + slug) with numeric suffix
+    if root.exists():
+        n = 2
+        while (Path(base_dir) / f"{session_id}-{n}").exists():
+            n += 1
+        root = Path(base_dir) / f"{session_id}-{n}"
     root.mkdir(parents=True, exist_ok=True)
     return SessionDir(root)
 
@@ -750,7 +1033,6 @@ def run_challenge_phase(
     config: ConclaveConfig,
     session_dir: Path,
     progress: Progress,
-    claim_verification: str = "",
 ) -> list[ModelResponse]:
     """Phase 4: Each advocate reads ALL other submissions and issues direct challenges.
 
@@ -778,30 +1060,15 @@ def run_challenge_phase(
             progress.warn(f"No model found for {resp.alias} — skipping challenge")
             continue
 
-        verification_block = ""
-        if claim_verification:
-            verification_block = (
-                f"{'=' * 60}\n\n"
-                f"## Claim Verification Brief (automated fact-check)\n\n"
-                f"{claim_verification}\n\n"
-            )
-
         challenge_prompt = (
             f"## Original Briefing\n\n{briefing}\n\n"
             f"{'=' * 60}\n\n"
             f"## Your Submission ({resp.alias})\n\n{resp.content}\n\n"
             f"{'=' * 60}\n\n"
             f"## All Advocate Submissions\n\n{all_submissions}\n\n"
-            f"{verification_block}"
             f"{'=' * 60}\n\n"
             f"Now challenge every other advocate directly. Be specific. "
             f"Quote their claims and demand they defend them."
-            + (
-                " The Claim Verification Brief above contains automated "
-                "fact-checks of key claims — use verified/incorrect findings "
-                "to sharpen your challenges."
-                if claim_verification else ""
-            )
         )
 
         challenge_calls.append({
@@ -1134,6 +1401,8 @@ def run_cardinal_phase(
     progress: Progress,
     stability_report: str = "",
     phase_label: str = "Judicial review",
+    all_bishops: list[ModelDef] | None = None,
+    all_priests: list[ModelDef] | None = None,
 ) -> tuple[list[ModelResponse], bool, str]:
     """Phase 6: Judicial review (The Bench).
 
@@ -1180,7 +1449,7 @@ def run_cardinal_phase(
         f"{'=' * 60}\n\n"
     )
 
-    # Append position stability report if available (EXHAUSTIVE+ / NUCLEAR)
+    # Append position stability report if available (T5+ / T6)
     if stability_report:
         cardinal_prompt += (
             f"## Position Stability Scorecard (Kelley-Riedl Sycophancy Audit)\n\n"
@@ -1206,6 +1475,40 @@ def run_cardinal_phase(
         max_tokens=4096,
         progress=progress,
     )
+
+    # --- Bishop fallback chain ---
+    # If a bishop (permanent Justice seat) failed, try substitutes from the
+    # unused bishop pool first, then unused priests.
+    _bishops_pool = all_bishops if all_bishops is not None else BISHOPS
+    _priests_pool = all_priests if all_priests is not None else PRIESTS
+    seated_ids = {c.id for c in cardinals}
+
+    fallback_pool = [m for m in _bishops_pool if m.id not in seated_ids]
+    fallback_pool += [m for m in _priests_pool if m.id not in seated_ids]
+
+    cardinal_responses = list(cardinal_responses)
+    for i, resp in enumerate(cardinal_responses):
+        if resp.status != "failed" or resp.role != "bishop":
+            continue
+        if not fallback_pool:
+            progress.warn(f"Justice {resp.display_name} failed — no fallback models available")
+            continue
+        substitute = fallback_pool.pop(0)
+        progress.justice_substitution(resp.display_name, substitute.display_name, "Justice")
+        retry_resp = call_model(
+            model=substitute,
+            system_prompt=CARDINAL_SYSTEM_PROMPT,
+            user_prompt=cardinal_prompt,
+            alias=resp.alias,
+            timeout=cardinal_timeout,
+            temperature=0.3,
+            max_tokens=4096,
+            progress=progress,
+        )
+        if retry_resp.status == "success":
+            cardinal_responses[i] = retry_resp
+        else:
+            progress.warn(f"Fallback {substitute.display_name} also failed: {retry_resp.error}")
 
     # Write individual judgments
     good_cardinals = successful_responses(cardinal_responses)
@@ -1399,7 +1702,7 @@ def run_fresh_eyes_phase(
         alias="Fresh-Eyes",
         timeout=config.depth.timeout_per_model,
         temperature=0.5,
-        max_tokens=3072,
+        max_tokens=4096,
         progress=progress,
     )
 
@@ -1410,6 +1713,163 @@ def run_fresh_eyes_phase(
         progress.info(f"Fresh Eyes review complete ({resp.elapsed:.1f}s)")
     else:
         progress.warn(f"Fresh Eyes failed: {resp.error}")
+
+    return resp
+
+
+def extract_claim_evidence_matrix(
+    briefing: str,
+    advocate_responses: list[ModelResponse],
+    challenge_responses: list[ModelResponse],
+    debate_rounds: list[list[ModelResponse]],
+    cardinal_responses: list[ModelResponse],
+    config: ConclaveConfig,
+    session_dir: Path,
+    progress: Progress,
+) -> Optional[ModelResponse]:
+    """Extract a structured claim-evidence matrix from the full deliberation.
+
+    Uses a fast/cheap Bishop (first available) to read the entire deliberation
+    record and produce a tabular matrix tracking every significant claim.
+    """
+    progress.info("Extracting claim-evidence matrix...")
+
+    # Assemble the full deliberation record
+    parts = [f"## BRIEFING\n\n{briefing}\n"]
+
+    good_advocates = successful_responses(advocate_responses)
+    if good_advocates:
+        parts.append("\n## ADVOCATE SUBMISSIONS\n")
+        for r in good_advocates:
+            parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
+
+    good_challenges = successful_responses(challenge_responses)
+    if good_challenges:
+        parts.append("\n## CHALLENGE ROUND\n")
+        for r in good_challenges:
+            parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
+
+    for round_idx, round_resps in enumerate(debate_rounds):
+        good_round = successful_responses(round_resps)
+        if good_round:
+            parts.append(f"\n## DEBATE ROUND {round_idx + 1}\n")
+            for r in good_round:
+                parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
+
+    good_cardinals = successful_responses(cardinal_responses)
+    if good_cardinals:
+        parts.append("\n## JUDICIAL OPINIONS\n")
+        for r in good_cardinals:
+            parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
+
+    full_record = "\n".join(parts)
+
+    # Select model: first Bishop that fits the context
+    estimated_tokens = len(full_record) // 4
+    matrix_model = _select_model_for_context(config.bishops, estimated_tokens, progress)
+    if matrix_model is None:
+        progress.warn("No model available for claim-evidence matrix — skipping")
+        return None
+
+    user_prompt = (
+        f"Extract the claim-evidence matrix from this deliberation.\n\n"
+        f"{full_record}"
+    )
+
+    resp = call_model(
+        model=matrix_model,
+        system_prompt=CLAIM_EXTRACTION_SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        alias="Claim-Matrix",
+        timeout=config.depth.timeout_per_model,
+        temperature=0.2,
+        max_tokens=4096,
+        progress=progress,
+    )
+
+    if resp.status == "success":
+        (session_dir.deliberation / "claim-evidence-matrix.md").write_text(
+            f"# Claim-Evidence Matrix\n\n{resp.content}\n"
+        )
+        progress.info(f"Claim-evidence matrix extracted ({resp.elapsed:.1f}s)")
+    else:
+        progress.warn(f"Claim-evidence matrix failed: {resp.error}")
+
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# Majority Opinion synthesis — consolidate individual judicial opinions
+# ---------------------------------------------------------------------------
+
+def synthesize_majority_opinion(
+    cardinal_responses: list[ModelResponse],
+    briefing: str,
+    config: ConclaveConfig,
+    session_dir: Path,
+    progress: Progress,
+) -> Optional[ModelResponse]:
+    """Synthesize individual judicial opinions into a single canonical ruling.
+
+    One LLM reads all judge opinions, resolves conflicts by majority vote,
+    and produces the Opinion of the Court. This becomes what dissenters
+    respond to and what the summary uses as the Recommended Outcome.
+
+    Returns the ModelResponse for cost tracking, or None if generation fails.
+    """
+    good_cardinals = successful_responses(cardinal_responses)
+    if not good_cardinals:
+        return None
+
+    progress.info("Synthesizing majority opinion from judicial panel...")
+
+    # Concatenate all judicial opinions
+    opinions_text = "\n\n---\n\n".join(
+        f"## {r.alias}\n\n{r.content}" for r in good_cardinals
+    )
+
+    user_prompt = (
+        f"## Original Briefing\n\n{briefing}\n\n"
+        f"{'=' * 60}\n\n"
+        f"## Individual Judicial Opinions ({len(good_cardinals)} judges)\n\n"
+        f"{opinions_text}\n\n"
+        f"{'=' * 60}\n\n"
+        f"Read all {len(good_cardinals)} judicial opinions above and produce "
+        f"the Opinion of the Court — a single, canonical ruling that resolves "
+        f"any conflicts by majority vote."
+    )
+
+    # Select model: same pattern as summary generation (pick first bishop that fits)
+    estimated_tokens = len(user_prompt) // 4
+    model = _select_model_for_context(config.bishops, estimated_tokens, progress)
+    if model is None:
+        progress.warn("No model available for majority opinion — skipping")
+        return None
+
+    resp = call_model(
+        model=model,
+        system_prompt=MAJORITY_OPINION_SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        alias="Majority-Opinion",
+        timeout=int(config.depth.timeout_per_model * 1.5),
+        temperature=0.3,
+        max_tokens=4096,
+        progress=progress,
+    )
+
+    if resp.status == "success":
+        opinion_text = f"# Opinion of the Court (Majority Opinion)\n\n{resp.content}\n"
+        # De-anonymize aliases in the majority opinion
+        alias_file = session_dir.meta / "alias-map.json"
+        cardinal_file = session_dir.meta / "cardinal-alias-map.json"
+        if alias_file.exists():
+            _a = json.loads(alias_file.read_text())
+            _c = json.loads(cardinal_file.read_text()) if cardinal_file.exists() else {}
+            opinion_text = _deanonymize_text(opinion_text, _a, _c)
+        (session_dir.judicial / "majority-opinion.md").write_text(opinion_text)
+        progress.info(f"Majority opinion written ({resp.elapsed:.1f}s)")
+    else:
+        progress.warn(f"Majority opinion synthesis failed: {resp.error}")
 
     return resp
 
@@ -1504,11 +1964,16 @@ def run_dissent_phase(
     config: ConclaveConfig,
     session_dir: Path,
     progress: Progress,
+    majority_opinion_text: str = "",
 ) -> list[ModelResponse]:
     """Give persistent dissenters a chance to issue formal dissenting opinions.
 
     Like a Supreme Court dissent: the advocate reads the verdict, disagrees,
     and writes a structured dissent for the record.
+
+    If majority_opinion_text is provided, dissenters respond to the consolidated
+    majority opinion rather than raw individual judicial opinions. This ensures
+    dissents reference elements actually present in the canonical ruling.
 
     Returns list of ModelResponse objects for cost tracking.
     """
@@ -1518,10 +1983,13 @@ def run_dissent_phase(
     alias_to_model = _build_alias_model_map(advocate_responses, advocates)
     good_cardinals = successful_responses(cardinal_responses)
 
-    # Build the verdict text for dissenters to read
-    verdict_text = "\n\n---\n\n".join(
-        f"## {r.alias}\n\n{r.content}" for r in good_cardinals
-    )
+    # Use majority opinion if available; fall back to concatenated raw opinions
+    if majority_opinion_text:
+        verdict_text = majority_opinion_text
+    else:
+        verdict_text = "\n\n---\n\n".join(
+            f"## {r.alias}\n\n{r.content}" for r in good_cardinals
+        )
 
     progress.phase(6, f"Dissenting opinions — {len(dissenters)} advocate(s) filing dissent...")
 
@@ -1583,113 +2051,134 @@ def run_dissent_phase(
 # ---------------------------------------------------------------------------
 
 SUMMARY_SYSTEM_PROMPT = """\
-You are a senior analyst producing a canonical session summary of a Tribunal
+You are a senior analyst producing the canonical session summary of a Tribunal
 deliberation. You have access to the full record: advocate submissions,
 challenges, debate rounds, judicial opinions, and (if present) Fresh Eyes.
 
-Produce a structured summary in EXACTLY this format. Do NOT add any sections,
-headings, or commentary beyond what is specified below.
+## EDITORIAL MANDATE
 
-## The Question
+This document is the EXECUTIVE SUMMARY — one page that carries the analytical
+weight. A reader who finishes it should understand the answer, the key evidence,
+the main disagreement, and what's still uncertain. The full deliverable lives
+in a separate document; this summary contextualizes it.
 
-One to three sentences restating what the deliberation was about. Write it
-as a clear problem statement — not a quote, not a title, but a sentence a
-human would understand cold.
+That means:
+- **Lead with the answer.** The Bottom Line is the first thing the reader sees.
+- **Explain WHY, not just WHAT.** Don't say "CBAM creates a moat." Say
+  "CBAM creates a moat because it taxes carbon-intensive imports at €110/tCO2,
+  giving low-emission producers like Acerinox (0.52 tCO2/t) a €163/tonne cost
+  advantage over blast-furnace importers (~2.0 tCO2/t)."
+- **Name specific data and mechanisms.** Vague references are worthless.
+- **Explain domain concepts when they first appear.** Define in context.
+- **Surface the key tension.** Every deliberation has a crux — name it.
 
-## Recommended Outcome
+Write in direct analytical voice. No "The Court recommends" or "The tribunal
+finds" — just state the analysis. This should read like a sharp analyst's brief,
+not a committee report or judicial opinion.
 
-The recommendation as determined by the JUDICIAL VERDICT — not your own opinion.
-You MUST faithfully represent what the judge(s) concluded:
+Produce a structured summary in EXACTLY the format below. Each section heading
+MUST be a markdown heading with the exact prefix shown (## or ###). Do NOT omit
+the heading markers. Do NOT add any sections beyond what is specified.
+
+YOUR OUTPUT MUST BEGIN WITH:
+
+## The Prompt
+
+(Then copy the original prompt VERBATIM from the briefing's "## Task" section.
+Do NOT rewrite, paraphrase, summarize, or restate it. Reproduce the user's
+exact words. Fix only obvious typos or grammar if needed.)
+
+## Bottom Line
+
+(Begin with a bold **Ruling:** line — one to three sentences that DIRECTLY ANSWER
+the core question asked in the briefing. Clear, unambiguous, directional. Not a
+framework, not conditions, not "it depends" — the actual answer.
+
+After the ruling, write 2-4 paragraphs explaining the answer with analytical
+depth — the key mechanisms, the strongest evidence, and the main caveats. This
+must faithfully represent the JUDICIAL VERDICT:
 - If the verdict is ACCEPT, state the accepted advocate's position.
-- If the verdict is SYNTHESIZE, state the synthesis exactly as the judge described
-  it — including ALL elements from ALL advocates the judge combined. Do not drop
-  components the judge included, even if you personally disagree.
-- If the verdict is REMAND, state that the matter was remanded and summarize the
-  judge's concerns.
+- If the verdict is SYNTHESIZE, state the synthesis as the judge described it.
+- If the verdict is REMAND, state the remand and the judge's concerns.
 
-Write this as a concrete, actionable paragraph that someone could hand to an
-engineer and say "build this." Include the key architectural decisions, specific
-tools or approaches chosen, and any quantitative parameters. This is NOT a summary
-of who said what — it is THE ANSWER the judge(s) produced.
+If a MAJORITY OPINION is present in the record, use it as the authoritative
+source. Do NOT re-adjudicate the case.
 
-CRITICAL: Do NOT re-adjudicate the case. Your job is to clearly communicate the
-judicial decision, not to override it with your own analysis of the record.
+CRITICAL: Replace all advocate aliases (Advocate-A, etc.) and judge aliases
+(Judge-A, etc.) with their real model names from the identity reveal section.)
 
 ## How We Got Here
 
-This section has two subsections:
-
-### Council Performance
-
-A markdown table with these EXACT columns:
-
-| Model | Final Position | Rank | Note |
-|-------|----------------|------|------|
-
-"Model" must use the REAL model name (from the identity reveal), not the alias.
-"Final Position" is one sentence describing their final stance.
-"Rank" is a number (1 = strongest). Use "-" for advocates who withdrew or merged.
-"Note" is one phrase explaining their ranking (e.g., "strongest evidence",
-"conceded key points", "fabricated statistics").
+(A narrative section with the following subsections:)
 
 ### Key Moments
 
-Bulleted list of 3-5 pivotal moments from the debate. Each bullet should name
-the advocate (by both alias AND model name, e.g. "Advocate-D (Claude Sonnet)"),
-describe what happened, and explain why it mattered. Focus on: position changes,
-evidence collapses, breakthrough insights, and moments where the challenge
-system worked as designed.
+(3-5 pivotal moments from the debate, written as mini-narratives (3-5 sentences
+each). Name advocates by their real model name, describe WHAT happened with
+specifics (the actual claim, counter-evidence, concession), and explain WHY
+it mattered. The reader should understand the intellectual substance.)
 
-Now, assess the task type. If the deliberation produced a BUILDABLE outcome
-(code, architecture, system design, pipeline, tool, process — something an
-engineer could implement), include the following section. If the task was
-purely analytical, evaluative, or opinion-seeking (e.g., "compare X vs Y",
-"is this approach good?"), OMIT this section entirely.
+### Scorecard
+
+(A single table showing how each judge rated each advocate:
+
+| Judge (Model) | [Advocate 1] | [Advocate 2] | ... | Winner |
+|---------------|-------------|-------------|-----|--------|
+| [Judge Model] | ADOPT/REJECT | ADOPT/REJECT | ... | [Winner] |
+
+Use real model names for both judges and advocates. Derive from the Ruling
+tables in each judicial opinion. If a judge issued PARTIAL ADOPT, write
+"PARTIAL". Below the table, add ONE paragraph synthesizing the judges' key
+analytical insights — the best lines from their Judge's Notes, attributed.
+Deduplicate: if 3 judges made the same point, state it once.)
+
+### Convergence Assessment
+
+(One paragraph: Was convergence epistemic (evidence-driven) or affective
+(social pressure / sycophantic drift)? Cite the specific evidence for your
+assessment (e.g., "all position shifts were triggered by verifiable corrections").
+If position stability data exists, reference it.)
+
+## Next Steps
+
+(Deduplicated list of unresolved questions and actionable follow-ups from the
+deliberation. For each:
+- **What**: The question or action
+- **Why it matters**: Brief explanation
+- **Confidence**: Highest confidence estimate from any judge
+
+If the deliberation produced a BUILDABLE outcome (code, architecture, system
+design, pipeline), include a "Build This" subsection:)
+
+### Build This
+
+(> **To implement this, paste the following into your AI engine:**
+
+A self-contained implementation prompt. Specify inputs, outputs, architecture,
+and all technical decisions from the council. Actionable without reading the
+full deliberation. Do NOT wrap in code fences.
+
+If the task was purely analytical (not buildable), OMIT the Build This subsection.)
 
 ## Dissenting Opinions
 
-If the record includes any formal dissenting opinions, summarize each one here.
-These are dissents AGAINST THE JUDICIAL VERDICT described in "Recommended Outcome"
-above. Since you faithfully reported the verdict, the dissent should clearly
-contrast with that recommendation — explain what the dissenter would do differently
-and why.
+(If the record includes formal dissenting opinions, summarize each one here.
+For each dissent: name the dissenter, state how their position differs from
+the Bottom Line, and note the strongest evidence the majority didn't address.
 
-For each dissent:
-- Name the dissenter by BOTH alias and real model name
-- State SPECIFICALLY how their position differs from the judicial verdict (the
-  Recommended Outcome above). Be concrete: "The verdict recommends X + Y, but the
-  dissenter argues Y is unnecessary because..."
-- State the core of their disagreement in 2-3 sentences
-- Note the strongest evidence they cited that the majority did not adequately address
-
-If there are no dissenting opinions in the record, OMIT this section entirely.
-Do NOT fabricate dissents — only include this section if dissent files appear
-in the record below.
-
-## Build This
-
-> **To implement this, paste the following into your AI engine:**
-
-A detailed, self-contained implementation prompt that an engineer could paste
-into Claude Code, Cursor, Codex, or any AI coding assistant. It must:
-- Specify the system to build (inputs, outputs, architecture)
-- Include all specific technical decisions from the council (models, thresholds,
-  formats, constraints)
-- Be actionable without reading the full deliberation
-- Do NOT wrap the prompt in code fences — write it as plain text
-
-Do NOT include preamble like "Based on the deliberation..." — the Build This
-section should read as a standalone engineering spec.
+If no dissenting opinions exist in the record, OMIT this section entirely.)
 
 IMPORTANT RULES:
-- Use real model names from the identity reveal, never aliases.
+- ALWAYS use real model names, never aliases.
 - Do not invent details not present in the deliberation.
-- Keep the total summary under 1500 words (excluding the Build This prompt and appendix).
-- Write in plain, direct language. No hedging, no filler.
+- Keep the total summary under 2500 words (excluding Build This and appendix).
+- Write in plain, direct analytical voice. No judicial framing.
+- Do NOT include a separate "Majority Opinion" section — its content belongs
+  in the Bottom Line.
 
-Finally, ALWAYS include the following two closing sections at the very end of the
-summary, after all other sections. Copy the "How The Tribunal Works" section
-VERBATIM — do not modify, summarize, or rephrase it. Then generate the Glossary.
+Finally, ALWAYS include these two closing sections at the very end.
+Copy "How The Tribunal Works" VERBATIM — do not modify it. Then generate
+the Glossary as the absolute last section.
 
 ## How The Tribunal Works
 
@@ -1722,10 +2211,10 @@ convergence was epistemic (evidence-driven) or affective (social pressure), and
 render a verdict: ACCEPT one position, SYNTHESIZE the best elements, or REMAND
 for further debate.
 
-**Depth levels** control rigor: QUICK (submissions only), BALANCED (1 debate round,
-1 judge), THOROUGH (3 rounds, 3 judges), RIGOROUS (5 rounds, full panel),
-EXHAUSTIVE (5 rounds + Fresh Eyes review), NUCLEAR (7 rounds + mid-debate
-judicial checkpoint).
+**Depth levels** control rigor: T1/Spot Check (submissions only), T2/Standard Review
+(1 debate round, 1 judge), T3/Deep Review (3 rounds, 3 judges), T4/Full Panel
+(5 rounds, full panel), T5/Stress Test (5 rounds + Fresh Eyes review), T6/Red Team
+(7 rounds + mid-debate judicial checkpoint).
 
 The system is deterministic code — it cannot be sycophantic. It dispatches prompts,
 collects responses, anonymizes identities, and enforces the adversarial structure.
@@ -1734,45 +2223,270 @@ The models argue; the code referees.
 ## Glossary
 
 This section defines terms used in the summary. It has two parts:
-a fixed set of Tribunal process terms, and domain-specific terms extracted
-from this particular deliberation.
-
-### Tribunal Terms
-
-Include these definitions VERBATIM — do not modify them:
-
-- **Advocate**: An independent AI model that produces a sealed submission in response
-  to the briefing. Advocates are anonymized (Advocate-A, Advocate-B, etc.) during
-  deliberation to prevent brand-bias.
-- **Justice / Judge**: An impartial AI model that evaluates advocate submissions after
-  debate. Justices (permanent seats) and Appellate/Magistrate Judges (drawn per session)
-  collectively form "The Bench."
-- **The Bench**: The panel of judges evaluating the deliberation.
-- **Challenge Round**: A phase where each advocate directly cross-examines the others'
-  submissions, identifying weaknesses and factual errors.
-- **ACCEPT**: A judicial verdict adopting one advocate's position as the strongest.
-- **SYNTHESIZE**: A judicial verdict combining the best elements from multiple advocates.
-- **REMAND**: A judicial verdict sending the case back to advocates for further debate
-  because the evidence is insufficient.
-- **Fresh Eyes**: A zero-context reviewer (EXHAUSTIVE+ depth) who reads only the final
-  output without seeing the debate, checking for coherence and groupthink artifacts.
-- **Position Stability**: A per-round score (1-5) tracking how much each advocate's
-  position shifted, used to detect sycophantic drift.
-- **Sycophantic Drift**: When a model changes its position to agree with others due
-  to social pressure rather than new evidence.
-- **Data Room**: Pre-gathered research (web search, financial data, legal cases) provided
-  to all advocates before deliberation as optional context.
-- **Dissent**: A formal objection filed by an advocate whose position was not adopted
-  by the judicial verdict, analogous to a Supreme Court dissent.
+domain-specific terms extracted from this deliberation, followed by a fixed
+set of Tribunal process terms.
 
 ### Domain Terms
 
-Now extract 5-15 domain-specific terms, acronyms, or jargon from THIS deliberation
-that a general reader might not know. For each, write a one-sentence definition.
-Only include terms that actually appeared in the submissions or judicial opinions.
-Do NOT repeat the Tribunal Terms above. Format as a bulleted list:
+COMPLETENESS CHECK: Review the ENTIRE document you just generated. Any term you
+bolded, any domain-specific concept, any acronym, any phrase a general reader
+might not know — it MUST appear in this glossary. Aim for 8-20 terms. Err on the
+side of including too many rather than too few.
 
-- **[Term]**: [One-sentence definition]"""
+Extract domain-specific terms, acronyms, or jargon from THIS deliberation that a
+general reader might not know. For each, write a one-sentence definition. Only
+include terms that actually appeared in the submissions or judicial opinions. Do
+NOT repeat the Tribunal Terms below. **Sort all terms alphabetically.** Format
+as a markdown table:
+
+| Term | Definition |
+|------|------------|
+| [Term] | [One-sentence definition] |
+
+### Tribunal Terms
+
+Include these definitions VERBATIM in a markdown table (alphabetized) — do not modify them:
+
+| Term | Definition |
+|------|------------|
+| ACCEPT | A judicial verdict adopting one advocate's position as the strongest. |
+| Advocate | An independent AI model that produces a sealed submission in response to the briefing. Advocates are anonymized (Advocate-A, Advocate-B, etc.) during deliberation to prevent brand-bias. |
+| Challenge Round | A phase where each advocate directly cross-examines the others' submissions, identifying weaknesses and factual errors. |
+| Dissent | A formal objection filed by an advocate whose position was not adopted by the judicial verdict, analogous to a Supreme Court dissent. |
+| Fresh Eyes | A zero-context reviewer (T5+ depth) who reads only the final output without seeing the debate, checking for coherence and groupthink artifacts. |
+| Justice / Judge | An impartial AI model that evaluates advocate submissions after debate. Justices (permanent seats) and Appellate/Magistrate Judges (drawn per session) collectively form "The Bench." |
+| Position Stability | A per-round score (1-5) tracking how much each advocate's position shifted, used to detect sycophantic drift. |
+| REMAND | A judicial verdict sending the case back to advocates for further debate because the evidence is insufficient. |
+| Sycophantic Drift | When a model changes its position to agree with others due to social pressure rather than new evidence. |
+| SYNTHESIZE | A judicial verdict combining the best elements from multiple advocates. |
+| The Bench | The panel of judges evaluating the deliberation. |
+| Wall Clock Time | The total elapsed real-world time from session start to final output, including all API calls, retries, and processing. |"""
+
+
+# ---------------------------------------------------------------------------
+# Condensed Council Digest — context-window-friendly record assembly
+# ---------------------------------------------------------------------------
+
+def _extract_concession_summary(content: str) -> str:
+    """Parse debate response for CONCEDE blocks, extract first sentence of each."""
+    if not content:
+        return "None"
+    concessions = []
+    for block in re.split(r'\*\*My response:\s*CONCEDE\*\*', content, flags=re.IGNORECASE):
+        if block == content.split("**My response: CONCEDE**")[0]:
+            continue  # skip text before first concession
+        first_sentence = re.split(r'[.!?\n]', block.strip(), maxsplit=1)[0].strip()
+        if first_sentence:
+            concessions.append(first_sentence)
+    return "; ".join(concessions) if concessions else "None"
+
+
+def _summarize_debate_rounds(rounds: list[list[ModelResponse]]) -> str:
+    """Build a markdown table summarizing debate rounds (condensed form)."""
+    lines = [
+        "| Round | Advocate | Stability | Position | Concessions |",
+        "|-------|----------|-----------|----------|-------------|",
+    ]
+    for round_idx, round_resps in enumerate(rounds, 1):
+        for r in successful_responses(round_resps):
+            stability = _extract_position_stability(r.content or "")
+            if stability >= 4:
+                position = "Revised"
+            elif stability >= 2:
+                position = "Refined"
+            else:
+                position = "Unchanged"
+            concessions = _extract_concession_summary(r.content or "")
+            # Truncate long concession text for the table
+            if len(concessions) > 80:
+                concessions = concessions[:77] + "..."
+            lines.append(f"| {round_idx} | {r.alias} | {stability}/5 | {position} | {concessions} |")
+    return "\n".join(lines)
+
+
+def build_condensed_digest(
+    briefing: str,
+    advocate_responses: list[ModelResponse],
+    challenge_responses: list[ModelResponse],
+    debate_rounds: list[list[ModelResponse]],
+    cardinal_responses: list[ModelResponse],
+    fresh_eyes_response: Optional[ModelResponse],
+    all_responses: dict[str, list[ModelResponse]],
+    identity_text: str = "",
+    majority_opinion_response: Optional[ModelResponse] = None,
+    claim_matrix_response: Optional[ModelResponse] = None,
+) -> str:
+    """Assemble a context-window-friendly version of the deliberation record.
+
+    - Briefing, submissions, challenges: full (they're short)
+    - Debate rounds 1 through N-3: condensed to a summary table
+    - Final 3 debate rounds: full (most relevant for synthesis)
+    - Judicial opinions, fresh eyes, dissents, claim matrix: full
+    """
+    good_advocates = successful_responses(advocate_responses)
+    good_challenges = successful_responses(challenge_responses)
+    good_cardinals = successful_responses(cardinal_responses)
+
+    parts = []
+    parts.append(f"## BRIEFING (the original question)\n\n{briefing}")
+
+    parts.append("\n\n## ADVOCATE SUBMISSIONS\n")
+    for r in good_advocates:
+        parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
+
+    if good_challenges:
+        parts.append("\n## CHALLENGE ROUND\n")
+        for r in good_challenges:
+            parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
+
+    # Debate rounds: condense early rounds, keep final 3 in full
+    n_rounds = len(debate_rounds)
+    cutoff = max(0, n_rounds - 3)  # rounds to condense (0-indexed)
+
+    if cutoff > 0:
+        condensed_rounds = debate_rounds[:cutoff]
+        parts.append(f"\n## DEBATE ROUNDS 1-{cutoff} (condensed)\n")
+        parts.append(_summarize_debate_rounds(condensed_rounds))
+        parts.append("\n")
+
+    # Full final rounds
+    for round_idx in range(cutoff, n_rounds):
+        good_round = successful_responses(debate_rounds[round_idx])
+        if good_round:
+            parts.append(f"\n## DEBATE ROUND {round_idx + 1}\n")
+            for r in good_round:
+                parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
+
+    if good_cardinals:
+        parts.append("\n## JUDICIAL OPINIONS\n")
+        for r in good_cardinals:
+            parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
+
+    if majority_opinion_response and majority_opinion_response.status == "success":
+        parts.append("\n## MAJORITY OPINION (Opinion of the Court)\n")
+        parts.append(majority_opinion_response.content)
+        parts.append("\n")
+
+    if fresh_eyes_response and fresh_eyes_response.status == "success":
+        parts.append("\n## FRESH EYES REVIEW\n")
+        parts.append(f"{fresh_eyes_response.content}\n")
+
+    good_dissents = successful_responses(all_responses.get("dissents", []))
+    if good_dissents:
+        parts.append("\n## DISSENTING OPINIONS\n")
+        for r in good_dissents:
+            adv_alias = r.alias.replace("Dissent-", "")
+            parts.append(f"### {adv_alias} (Dissent)\n{r.content}\n\n---\n")
+
+    if claim_matrix_response and claim_matrix_response.status == "success":
+        parts.append("\n## CLAIM-EVIDENCE MATRIX\n")
+        parts.append(f"{claim_matrix_response.content}\n")
+
+    if identity_text:
+        parts.append(f"\n{identity_text}")
+
+    return "\n".join(parts)
+
+
+def _select_model_for_context(
+    models: list[ModelDef],
+    estimated_tokens: int,
+    progress: Progress,
+) -> Optional[ModelDef]:
+    """Pick the first model whose context window fits estimated_tokens * 1.2."""
+    headroom = int(estimated_tokens * 1.2)
+    for m in models:
+        if m.context_window >= headroom:
+            return m
+    # No model has enough headroom — warn and return the largest
+    if models:
+        largest = max(models, key=lambda m: m.context_window)
+        progress.warn(
+            f"No model has {headroom} token capacity — using {largest.display_name} "
+            f"({largest.context_window} tokens)"
+        )
+        return largest
+    return None
+
+
+def _deanonymize_text(text: str, alias_map: dict, cardinal_alias_map: dict) -> str:
+    """Replace all advocate/judge aliases with real model names in text.
+
+    Handles:
+      - Full forms: 'Advocate-A', 'Judge-B'
+      - Plural forms: 'Advocates-A', 'Judges-D'
+      - Grouped shorthand: 'Advocates A, D, F', 'Judges D, A, E, and B'
+      - Grouped with hyphens: 'Judges-D, A, E, and B'
+      - Parenthetical: 'bears (E, C)', 'judges (A, D)'
+
+    Order matters: grouped patterns run FIRST (before individual replacement)
+    so that 'Judges-D, A, E, and B' is caught as one group, not broken apart.
+    """
+    import re
+
+    # --- Helper for grouped shorthand ---
+    def _expand_role_group(m: re.Match, role_prefix: str, source_map: dict) -> str:
+        """Turn 'Advocates A, D, F' or 'Judges-D, A, E, and B' into model names."""
+        letters_part = re.sub(
+            rf"^{role_prefix}s?\s*[-–—]?\s*", "", m.group(0), flags=re.IGNORECASE
+        )
+        letters = re.findall(r"[A-Z]", letters_part)
+        names = []
+        for letter in letters:
+            key = f"{role_prefix}-{letter}"
+            if key in source_map:
+                names.append(source_map[key]["model"])
+            else:
+                names.append(f"{role_prefix}-{letter}")
+        if len(names) == 0:
+            return m.group(0)
+        if len(names) <= 2:
+            return " and ".join(names)
+        return ", ".join(names[:-1]) + ", and " + names[-1]
+
+    # --- Pass 1: grouped shorthand FIRST (before individual replacement) ---
+    # Must run before exact replacement, otherwise "Judges-D, A, E, and B"
+    # gets "Judges-D" replaced individually, leaving orphaned ", A, E, and B".
+    text = re.sub(
+        r"Advocates?\s*[-–—]?\s*[A-Z](?:\s*(?:,|and)\s*[A-Z])*",
+        lambda m: _expand_role_group(m, "Advocate", alias_map),
+        text,
+    )
+    text = re.sub(
+        r"Judges?\s*[-–—]?\s*[A-Z](?:\s*(?:,|and)\s*[A-Z])*",
+        lambda m: _expand_role_group(m, "Judge", cardinal_alias_map),
+        text,
+    )
+
+    # --- Pass 2: exact alias replacement for any remaining singles (longest first) ---
+    for alias, info in sorted(alias_map.items(), key=lambda x: -len(x[0])):
+        text = text.replace(alias, info["model"])
+    for alias, info in sorted(cardinal_alias_map.items(), key=lambda x: -len(x[0])):
+        text = text.replace(alias, info["model"])
+
+    # --- Pass 3: parenthetical shorthand like "bears (E, C)" or "(A, D)" ---
+    def _expand_paren_group(m: re.Match) -> str:
+        prefix = m.group(1)
+        letters = re.findall(r"[A-Z]", m.group(2))
+        names = []
+        for letter in letters:
+            adv_key = f"Advocate-{letter}"
+            judge_key = f"Judge-{letter}"
+            if adv_key in alias_map:
+                names.append(alias_map[adv_key]["model"])
+            elif judge_key in cardinal_alias_map:
+                names.append(cardinal_alias_map[judge_key]["model"])
+            else:
+                names.append(letter)
+        return f"{prefix}({', '.join(names)})"
+
+    text = re.sub(
+        r"(\w+\s*)\(([A-Z](?:\s*,\s*[A-Z])*)\)",
+        _expand_paren_group,
+        text,
+    )
+
+    return text
 
 
 def generate_session_summary(
@@ -1789,6 +2503,8 @@ def generate_session_summary(
     wall_time: float,
     remand_count: int,
     progress: Progress,
+    majority_opinion_response: Optional[ModelResponse] = None,
+    claim_matrix_response: Optional[ModelResponse] = None,
 ) -> Optional[ModelResponse]:
     """Generate the canonical session summary via LLM synthesis.
 
@@ -1827,60 +2543,32 @@ def generate_session_summary(
     for alias, info in alias_map.items():
         identity_lines.append(f"- {alias} = {info['model']} ({info['provider']})")
     for alias, info in cardinal_alias_map.items():
-        role = info.get('role', 'judge')
+        role = _ROLE_DISPLAY.get(info.get('role', ''), info.get('role', 'judge'))
         identity_lines.append(f"- {alias} = {info['model']} ({info['provider']}, {role})")
     identity_text = "\n".join(identity_lines)
 
-    # Build the full record for the LLM
-    record_parts = []
-
-    record_parts.append(f"## BRIEFING (the original question)\n\n{briefing}")
-
-    record_parts.append("\n\n## ADVOCATE SUBMISSIONS\n")
-    for r in good_advocates:
-        record_parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
-
-    if good_challenges:
-        record_parts.append("\n## CHALLENGE ROUND\n")
-        for r in good_challenges:
-            record_parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
-
-    for round_idx, round_resps in enumerate(debate_rounds, 1):
-        good_round = successful_responses(round_resps)
-        if good_round:
-            record_parts.append(f"\n## DEBATE ROUND {round_idx}\n")
-            for r in good_round:
-                record_parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
-
-    if good_cardinals:
-        record_parts.append("\n## JUDICIAL OPINIONS\n")
-        for r in good_cardinals:
-            record_parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
-
-    if fresh_eyes_response and fresh_eyes_response.status == "success":
-        record_parts.append("\n## FRESH EYES REVIEW\n")
-        record_parts.append(f"{fresh_eyes_response.content}\n")
-
-    # Include dissenting opinions in the record
-    good_dissents = successful_responses(all_responses.get("dissents", []))
-    if good_dissents:
-        record_parts.append("\n## DISSENTING OPINIONS\n")
-        for r in good_dissents:
-            adv_alias = r.alias.replace("Dissent-", "")
-            record_parts.append(f"### {adv_alias} (Dissent)\n{r.content}\n\n---\n")
-
-    record_parts.append(f"\n{identity_text}")
-
-    full_record = "\n".join(record_parts)
+    # Build condensed record (compresses early debate rounds into a table)
+    full_record = build_condensed_digest(
+        briefing=briefing,
+        advocate_responses=advocate_responses,
+        challenge_responses=challenge_responses,
+        debate_rounds=debate_rounds,
+        cardinal_responses=cardinal_responses,
+        fresh_eyes_response=fresh_eyes_response,
+        all_responses=all_responses,
+        identity_text=identity_text,
+        majority_opinion_response=majority_opinion_response,
+        claim_matrix_response=claim_matrix_response,
+    )
 
     summary_prompt = (
         f"Produce the session summary for this Tribunal deliberation.\n\n"
         f"{full_record}"
     )
 
-    # Select synthesizer model: use first Bishop (Qwen 3.5 397B)
-    from config_loader import BISHOPS
-    summary_model = BISHOPS[0] if BISHOPS else None
+    # Select synthesizer model: context-window-aware (pick first bishop that fits)
+    estimated_tokens = len(full_record) // 4  # rough char-to-token estimate
+    summary_model = _select_model_for_context(config.bishops, estimated_tokens, progress)
     if summary_model is None:
         progress.warn("No model available for session summary — skipping")
         return None
@@ -1892,7 +2580,7 @@ def generate_session_summary(
         alias="Summary-Synthesizer",
         timeout=int(config.depth.timeout_per_model * 1.5),  # same multiplier as judges
         temperature=0.3,
-        max_tokens=4096,
+        max_tokens=8192,
         progress=progress,
     )
 
@@ -1904,17 +2592,26 @@ def generate_session_summary(
     n_judges = len(good_cardinals)
 
     # Extract date stamp and topic slug from session_id for filenames
-    # session_id format: "tribunal-{slug}-{YYYYMMDD}-{HHMMSS}"
+    # New format: "YYYYMMDD-{slug}" (date first, no prefix)
+    # Legacy format: "tribunal-{slug}-{YYYYMMDD}-{HHMMSS}"
     _sid_parts = session_id.split("-")
-    # Find the date part (8 digits)
     _date_stamp = ""
     _slug_parts = []
-    for _i, _p in enumerate(_sid_parts):
-        if re.match(r"^\d{8}$", _p):
-            _date_stamp = _p
-            break
-        elif _i > 0:  # skip "tribunal" prefix
-            _slug_parts.append(_p)
+    if _sid_parts and re.match(r"^\d{8}$", _sid_parts[0]):
+        # New format: date is first token
+        _date_stamp = _sid_parts[0]
+        _slug_parts = _sid_parts[1:]
+    else:
+        # Legacy format: scan for date, skip "tribunal" prefix
+        for _i, _p in enumerate(_sid_parts):
+            if re.match(r"^\d{8}$", _p):
+                _date_stamp = _p
+                break
+            elif _i > 0:  # skip "tribunal" prefix
+                _slug_parts.append(_p)
+    # Strip trailing HHMMSS from slug if present (legacy format)
+    if _slug_parts and re.match(r"^\d{6}$", _slug_parts[-1]):
+        _slug_parts = _slug_parts[:-1]
     _topic_slug = "-".join(_slug_parts) if _slug_parts else "session"
     if not _date_stamp:
         _date_stamp = datetime.now().strftime("%Y%m%d")
@@ -1954,11 +2651,18 @@ def generate_session_summary(
         f"Cost: ${cost:.4f} | Time: {minutes}m {seconds:02d}s**\n"
         f"*Full logs: `tribunal-sessions/{session_id}/` | "
         f"Audit trail: `meta/final-output.md` | "
-        f"Narrative: `narrative/play-by-play.md`*\n\n"
+        f"Narrative: `narrative/play-by-play.md`*\n"
+        f"*Note: During deliberation, all {len(good_advocates)} advocates were anonymized "
+        f"behind letter codes to prevent brand-bias from influencing judges. "
+        f"The model identities revealed throughout this summary were unknown "
+        f"to all participants during the session.*\n\n"
         f"---\n\n"
     )
 
     summary_text = frontmatter + header + (resp.content or "")
+
+    # Programmatic de-anonymization — replace any remaining aliases the LLM missed
+    summary_text = _deanonymize_text(summary_text, alias_map, cardinal_alias_map)
 
     # Write with canonical filename (also keep legacy name as symlink)
     (session_dir / summary_md_name).write_text(summary_text)
@@ -1969,11 +2673,13 @@ def generate_session_summary(
     progress.info(f"Session summary written: {summary_md_name} ({resp.elapsed:.1f}s)")
 
     # --- Generate PDF from session summary (optional, requires reportlab) ---
+    pdf_generated = False
     try:
         from summary_pdf import generate_summary_pdf
         md_path = str(session_dir / summary_md_name)
         pdf_path = str(session_dir / summary_pdf_name)
         generate_summary_pdf(md_path, pdf_path)
+        pdf_generated = True
         # Symlink legacy name
         legacy_pdf = session_dir / "session-summary.pdf"
         if legacy_pdf.exists() or legacy_pdf.is_symlink():
@@ -1984,6 +2690,55 @@ def generate_session_summary(
         progress.info("PDF generation skipped (reportlab not installed)")
     except Exception as e:
         progress.warn(f"PDF generation failed: {e}")
+
+    # --- Generate Executive Brief PDF (2-page summary, requires reportlab) ---
+    exec_brief_name = summary_basename.replace("session-summary", "exec-brief") + ".pdf"
+    exec_brief_generated = False
+    try:
+        from exec_brief_pdf import generate_exec_brief
+        md_path_for_brief = str(session_dir / summary_md_name)
+        brief_path = str(session_dir / exec_brief_name)
+        generate_exec_brief(md_path_for_brief, brief_path)
+        exec_brief_generated = True
+        # Symlink legacy name
+        legacy_brief = session_dir / "exec-brief.pdf"
+        if legacy_brief.exists() or legacy_brief.is_symlink():
+            legacy_brief.unlink()
+        legacy_brief.symlink_to(exec_brief_name)
+        progress.info(f"Executive brief generated: {exec_brief_name}")
+    except ImportError:
+        progress.info("Executive brief skipped (exec_brief_pdf not found)")
+    except Exception as e:
+        progress.warn(f"Executive brief generation failed: {e}")
+
+    # --- Re-write summary with PDF/brief links if generated ---
+    if pdf_generated or exec_brief_generated:
+        link_parts = [
+            f"Full logs: `tribunal-sessions/{session_id}/`",
+            f"Audit trail: `meta/final-output.md`",
+            f"Narrative: `narrative/play-by-play.md`",
+        ]
+        if pdf_generated:
+            link_parts.append(f"PDF: `{summary_pdf_name}`")
+        if exec_brief_generated:
+            link_parts.append(f"Brief: `{exec_brief_name}`")
+
+        header_with_pdf = (
+            f"# Tribunal Session Summary\n"
+            f"**Session: {session_id} | Depth: {config.depth.name} | "
+            f"Advocates: {len(good_advocates)} | Judges: {n_judges} | "
+            f"Cost: ${cost:.4f} | Time: {minutes}m {seconds:02d}s**\n"
+            f"*{' | '.join(link_parts)}*\n"
+            f"*Note: During deliberation, all advocates were anonymized "
+            f"(Advocate-A through Advocate-{chr(ord('A') + len(good_advocates) - 1)}) "
+            f"to prevent brand-bias from influencing judges. The model identities "
+            f"revealed throughout this summary were unknown to all participants "
+            f"during the session.*\n\n"
+            f"---\n\n"
+        )
+        summary_text = frontmatter + header_with_pdf + (resp.content or "")
+        summary_text = _deanonymize_text(summary_text, alias_map, cardinal_alias_map)
+        (session_dir / summary_md_name).write_text(summary_text)
 
     return resp
 
@@ -2049,40 +2804,21 @@ def generate_play_by_play(
     good_cardinals = successful_responses(cardinal_responses)
 
     if not good_challenges and not debate_rounds:
-        # QUICK depth — no debate to narrate
+        # T1 depth — no debate to narrate
         return []
 
-    progress.info("Generating dual play-by-play narratives (Qwen 3.5 + DeepSeek V3)...")
+    progress.info("Generating dual play-by-play narratives...")
 
-    # Compile the full transcript
-    transcript_parts = []
-
-    transcript_parts.append("## INITIAL SUBMISSIONS\n")
-    for r in good_advocates:
-        transcript_parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
-
-    if good_challenges:
-        transcript_parts.append("\n## CHALLENGE ROUND\n")
-        for r in good_challenges:
-            transcript_parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
-
-    for round_idx, round_resps in enumerate(debate_rounds, 1):
-        good_round = successful_responses(round_resps)
-        if good_round:
-            transcript_parts.append(f"\n## DEBATE ROUND {round_idx}\n")
-            for r in good_round:
-                transcript_parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
-
-    if good_cardinals:
-        transcript_parts.append("\n## JUDICIAL OPINIONS\n")
-        for r in good_cardinals:
-            transcript_parts.append(f"### {r.alias}\n{r.content}\n\n---\n")
-
-    if fresh_eyes_response and fresh_eyes_response.status == "success":
-        transcript_parts.append("\n## FRESH EYES REVIEW\n")
-        transcript_parts.append(f"{fresh_eyes_response.content}\n")
-
-    full_transcript = "\n".join(transcript_parts)
+    # Build condensed transcript (compresses early debate rounds)
+    full_transcript = build_condensed_digest(
+        briefing=briefing,
+        advocate_responses=advocate_responses,
+        challenge_responses=challenge_responses,
+        debate_rounds=debate_rounds,
+        cardinal_responses=cardinal_responses,
+        fresh_eyes_response=fresh_eyes_response,
+        all_responses={},  # narrators don't need dissents
+    )
 
     narrator_prompt = (
         f"## Original Question\n\n{briefing}\n\n"
@@ -2092,14 +2828,14 @@ def generate_play_by_play(
         f"Write the play-by-play narrative of this deliberation."
     )
 
-    # --- Dual narrators: Qwen 3.5 397B (Justice) + DeepSeek V3 (Advocate) ---
+    # --- Dual narrators: context-window-aware model selection ---
     from config_loader import BISHOPS, ADVOCATES
 
-    narrator_qwen = None
-    for m in BISHOPS:
-        if "qwen" in m.id.lower():
-            narrator_qwen = m
-            break
+    estimated_tokens = len(narrator_prompt) // 4
+    narrator_qwen = _select_model_for_context(
+        [m for m in BISHOPS if "qwen" in m.id.lower()] or BISHOPS[:1],
+        estimated_tokens, progress,
+    )
     if narrator_qwen is None:
         narrator_qwen = BISHOPS[0]
 
@@ -2235,32 +2971,98 @@ def build_final_output(
     session_id: str,
     config: ConclaveConfig,
     dissent_responses: Optional[list[ModelResponse]] = None,
+    majority_opinion_response: Optional[ModelResponse] = None,
 ) -> str:
-    """Build the final output document."""
+    """Build the final output document — the clean deliverable.
 
+    For T1: raw advocate submissions (no debate/judges).
+    For T2+: the majority opinion's Deliverable section as a clean document,
+    stripped of tribunal framing. This is the actual answer to the user's question.
+    """
+
+    good_advocates = successful_responses(advocate_responses)
+    depth_name = config.depth.name
+
+    if depth_name == "T1":
+        lines = [
+            f"# Tribunal Output: {session_id}",
+            f"## Depth: {depth_name}",
+            "",
+            f"**{len(good_advocates)} independent submissions** for your review.",
+            "At T1 (Spot Check) depth, there is no debate or judicial review — you get raw,",
+            "independent perspectives to compare yourself.",
+            "", "---", "",
+        ]
+        for resp in good_advocates:
+            lines.extend([f"## {resp.alias}", "", resp.content or "(no content)", "", "---", ""])
+        return "\n".join(lines)
+
+    # T2+: Extract the clean deliverable from the majority opinion
+    if majority_opinion_response and majority_opinion_response.status == "success":
+        content = majority_opinion_response.content or ""
+        # Extract the Deliverable section (the substantive answer)
+        deliverable = _extract_section(content, "Deliverable")
+        if deliverable:
+            return deliverable.strip()
+        # Fallback: if no Deliverable header, try legacy "The Court's Recommendation"
+        deliverable = _extract_section(content, "The Court's Recommendation")
+        if deliverable:
+            return deliverable.strip()
+        # Last fallback: return the full majority opinion minus verdict/metadata
+        return content.strip()
+
+    # No majority opinion — fall back to best advocate submission
+    if good_advocates:
+        return good_advocates[0].content or "(no content)"
+
+    return "(No output generated)"
+
+
+def _extract_section(text: str, heading: str) -> Optional[str]:
+    """Extract content under a ### heading until the next ### or ## heading."""
+    pattern = rf"###\s+{re.escape(heading)}\s*\n"
+    match = re.search(pattern, text)
+    if not match:
+        return None
+    start = match.end()
+    # Find the next heading (## or ###) or end of text
+    next_heading = re.search(r"\n#{2,3}\s+", text[start:])
+    if next_heading:
+        return text[start:start + next_heading.start()]
+    return text[start:]
+
+
+def build_council_record(
+    advocate_responses: list[ModelResponse],
+    challenge_responses: list[ModelResponse],
+    debate_rounds: list[list[ModelResponse]],
+    cardinal_responses: list[ModelResponse],
+    fresh_eyes_response: Optional[ModelResponse],
+    session_id: str,
+    config: ConclaveConfig,
+    dissent_responses: Optional[list[ModelResponse]] = None,
+    majority_opinion_response: Optional[ModelResponse] = None,
+) -> str:
+    """Build the full deliberation record for audit purposes.
+
+    This is the comprehensive log of all judicial opinions, majority opinion,
+    fresh eyes, dissents, and original submissions. Written to meta/council-record.md.
+    """
     good_advocates = successful_responses(advocate_responses)
     good_challenges = successful_responses(challenge_responses)
     good_cardinals = successful_responses(cardinal_responses)
     depth_name = config.depth.name
 
     lines = [
-        f"# Tribunal Output: {session_id}",
+        f"# Council Record: {session_id}",
         f"## Depth: {depth_name}",
         "",
     ]
 
-    if depth_name == "QUICK":
-        lines.extend([
-            f"**{len(good_advocates)} independent submissions** for your review.",
-            "At QUICK depth, there is no debate or judicial review — you get raw,",
-            "independent perspectives to compare yourself.",
-            "", "---", "",
-        ])
+    if depth_name == "T1":
         for resp in good_advocates:
             lines.extend([f"## {resp.alias}", "", resp.content or "(no content)", "", "---", ""])
-
     else:
-        # BALANCED+ : full deliberation output
         total_debate_resps = sum(len(successful_responses(r)) for r in debate_rounds)
         lines.extend([
             f"**{len(good_advocates)} advocates** deliberated with "
@@ -2270,20 +3072,23 @@ def build_final_output(
             "", "---", "",
         ])
 
-        # Judicial opinions (the headline)
         if good_cardinals:
             lines.extend(["## Judicial Opinions", ""])
             for resp in good_cardinals:
                 lines.extend([f"### {resp.alias}", "", resp.content or "(no content)", "", "---", ""])
 
-        # Fresh Eyes
+        if majority_opinion_response and majority_opinion_response.status == "success":
+            lines.extend([
+                "## Majority Opinion", "",
+                majority_opinion_response.content or "(no content)", "", "---", "",
+            ])
+
         if fresh_eyes_response and fresh_eyes_response.status == "success":
             lines.extend([
                 "## Fresh Eyes Review", "",
                 fresh_eyes_response.content or "(no content)", "", "---", "",
             ])
 
-        # Dissenting opinions
         good_dissents = successful_responses(dissent_responses or [])
         if good_dissents:
             lines.extend(["## Dissenting Opinions", ""])
@@ -2294,12 +3099,18 @@ def build_final_output(
                     resp.content or "(no content)", "", "---", "",
                 ])
 
-        # Original submissions
         lines.extend(["## Original Advocate Submissions", ""])
         for resp in good_advocates:
             lines.extend([f"### {resp.alias}", "", resp.content or "(no content)", "", "---", ""])
 
     return "\n".join(lines)
+
+
+_ROLE_DISPLAY = {
+    "bishop": "Justice",
+    "priest": "Appellate Judge",
+    "deacon": "Magistrate Judge",
+}
 
 
 def write_debrief(
@@ -2347,8 +3158,8 @@ def write_debrief(
         "### Summary",
     ]
 
-    if depth_name == "QUICK":
-        lines.append(f"{len(good_advocates)} advocates independently addressed the task at QUICK depth.")
+    if depth_name == "T1":
+        lines.append(f"{len(good_advocates)} advocates independently addressed the task at T1 (Spot Check) depth.")
         lines.append("No challenges, debate, or judicial review was performed.")
     else:
         lines.append(
@@ -2381,7 +3192,8 @@ def write_debrief(
             "|------|-------|----------|------|--------|"])
         for resp in all_responses["cardinals"]:
             status = "✓" if resp.status == "success" else f"✗ {resp.error or 'Failed'}"
-            lines.append(f"| {resp.alias} | {resp.display_name} | {resp.provider} | {resp.role} | {status} |")
+            rank = _ROLE_DISPLAY.get(resp.role, resp.role)
+            lines.append(f"| {resp.alias} | {resp.display_name} | {resp.provider} | {rank} | {status} |")
 
     # Session statistics
     lines.extend(["", "### Session Statistics", "",
@@ -2417,6 +3229,14 @@ def write_debrief(
             f"{p_out:,} | ${p_cost:.4f} | {p_time:.1f}s |"
         )
 
+    # Claim-evidence matrix (if generated)
+    matrix_path = session_dir.deliberation / "claim-evidence-matrix.md"
+    if matrix_path.exists():
+        matrix_content = matrix_path.read_text()
+        # Strip the "# Claim-Evidence Matrix" header if present (we add our own)
+        matrix_content = matrix_content.replace("# Claim-Evidence Matrix\n\n", "").strip()
+        lines.extend(["", "### Claim-Evidence Matrix", "", matrix_content])
+
     # Identity reveals
     lines.extend(["", "### Identity Reveal — Advocates", "",
         "| Alias | Model | Provider |",
@@ -2429,7 +3249,8 @@ def write_debrief(
             "| Alias | Model | Provider | Rank |",
             "|-------|-------|----------|------|"])
         for alias, info in cardinal_alias_map.items():
-            lines.append(f"| {alias} | {info['model']} | {info['provider']} | {info.get('role', '')} |")
+            rank = _ROLE_DISPLAY.get(info.get('role', ''), info.get('role', ''))
+            lines.append(f"| {alias} | {info['model']} | {info['provider']} | {rank} |")
 
     if good_fresh:
         lines.extend(["", "### Identity Reveal — Fresh Eyes", "",
@@ -2499,7 +3320,7 @@ def main():
     parser = argparse.ArgumentParser(description="The Tribunal — Council Orchestrator")
     parser.add_argument("--briefing", required=True, help="Path to briefing file or '-' for stdin")
     parser.add_argument("--sealed-submission", default=None, help="Path to host agent's sealed submission")
-    parser.add_argument("--depth", default=None, help="Depth level (QUICK|BALANCED|THOROUGH|RIGOROUS|EXHAUSTIVE)")
+    parser.add_argument("--depth", default=None, help="Depth level (T1|T2|T3|T4|T5|T6). Old names also accepted: QUICK|BALANCED|THOROUGH|RIGOROUS|EXHAUSTIVE|NUCLEAR")
     parser.add_argument("--emit", default="summary", choices=["summary", "json", "paths"],
                         help="Output mode: summary (human-readable), json (structured), paths (file paths only)")
     parser.add_argument("--session-id", default=None, help="Override session ID (default: auto-generated)")
@@ -2511,7 +3332,7 @@ def main():
     args = parser.parse_args()
 
     # Load config
-    depth = args.depth or os.environ.get("CONCLAVE_DEFAULT_DEPTH", "QUICK")
+    depth = args.depth or os.environ.get("CONCLAVE_DEFAULT_DEPTH", "T1")
     config = load_config(depth)
 
     # Read briefing (before session ID so we can extract a topical slug)
@@ -2531,11 +3352,6 @@ def main():
     progress = Progress(session_id, config.depth.name)
 
     progress.session_start()
-
-    # Bavest enrichment: detect ticker, prepend Data Room block if found
-    briefing_text = enrich_briefing(briefing_text)
-    if briefing_text.startswith("## Data Room"):
-        progress.info("Data Room: Bavest fundamentals injected into briefing.")
 
     (session_dir / "briefing.md").write_text(briefing_text)
 
@@ -2557,6 +3373,7 @@ def main():
         "debates": [],
         "cardinals": [],
         "dissents": [],
+        "claim_matrix": [],
         "fresh_eyes": [],
         "narrative": [],
         "summary": [],
@@ -2579,27 +3396,7 @@ def main():
     all_responses["advocates"] = advocate_responses
 
     # ================================================================
-    # Phase 3.5: Automated claim verification (BALANCED+)
-    # ================================================================
-    claim_verification = ""
-    if config.depth.debate_rounds > 0:
-        good_adv = successful_responses(advocate_responses)
-        submissions = [r.content for r in good_adv if r.content]
-        if submissions:
-            progress.info("Claim verification: fact-checking advocate submissions...")
-            verification_result = verify_advocate_claims(
-                submissions=submissions,
-                briefing=briefing_text,
-            )
-            if verification_result:
-                claim_verification = verification_result
-                (session_dir.deliberation / "claim-verification.md").write_text(verification_result)
-                progress.info(f"Claim verification brief generated ({len(verification_result)} chars)")
-            else:
-                progress.info("Claim verification: skipped (no Perplexity API key or no result)")
-
-    # ================================================================
-    # Phase 4: Challenge round (BALANCED+)
+    # Phase 4: Challenge round (T2+)
     # ================================================================
     challenge_responses: list[ModelResponse] = []
     if config.depth.debate_rounds > 0:
@@ -2610,19 +3407,18 @@ def main():
             config=config,
             session_dir=session_dir,
             progress=progress,
-            claim_verification=claim_verification,
         )
         all_responses["challenges"] = challenge_responses
 
-    # Pre-compute cardinal availability (needed for NUCLEAR mid-debate checkpoint)
+    # Pre-compute cardinal availability (needed for T6 mid-debate checkpoint)
     has_cardinals = (config.depth.cardinals_bishops > 0 or
                      config.depth.cardinals_priests > 0 or
                      config.depth.cardinals_deacons > 0)
     cardinals: list[ModelDef] = []
 
     # ================================================================
-    # Phase 5: Debate rounds (BALANCED+)
-    # For NUCLEAR: split into two halves with judicial checkpoint
+    # Phase 5: Debate rounds (T2+)
+    # For T6 (Red Team): split into two halves with judicial checkpoint
     # ================================================================
     debate_rounds: list[list[ModelResponse]] = []
     checkpoint_cardinal_responses: list[ModelResponse] = []
@@ -2631,8 +3427,8 @@ def main():
         checkpoint_round = config.depth.mid_debate_checkpoint  # 0 = no checkpoint
 
         if checkpoint_round > 0 and config.depth.debate_rounds > checkpoint_round:
-            # ---- NUCLEAR-style: debate in two halves with judicial checkpoint ----
-            progress.info(f"NUCLEAR mode: debate rounds 1-{checkpoint_round}, then judicial checkpoint, then rounds {checkpoint_round+1}-{config.depth.debate_rounds}")
+            # ---- T6 (Red Team): debate in two halves with judicial checkpoint ----
+            progress.info(f"T6 Red Team mode: debate rounds 1-{checkpoint_round}, then judicial checkpoint, then rounds {checkpoint_round+1}-{config.depth.debate_rounds}")
 
             # Phase 5a: First half of debate
             first_half_config = deepcopy(config)
@@ -2674,6 +3470,8 @@ def main():
                     progress=progress,
                     stability_report=stability_report_1 if config.depth.position_stability_audit else "",
                     phase_label=f"Mid-debate judicial checkpoint (round {checkpoint_round})",
+                    all_bishops=config.bishops,
+                    all_priests=config.priests,
                 )
 
                 # Write checkpoint files with distinct names
@@ -2734,7 +3532,7 @@ def main():
         )
 
     # ================================================================
-    # Phase 6: Judicial review (BALANCED+)
+    # Phase 6: Judicial review (T2+)
     # ================================================================
     cardinal_responses: list[ModelResponse] = []
 
@@ -2752,6 +3550,8 @@ def main():
             session_dir=session_dir,
             progress=progress,
             stability_report=stability_report,
+            all_bishops=config.bishops,
+            all_priests=config.priests,
         )
         all_responses["cardinals"].extend(cardinal_responses)
 
@@ -2799,6 +3599,8 @@ def main():
                 session_dir=session_dir,
                 progress=progress,
                 stability_report=stability_report,
+                all_bishops=config.bishops,
+                all_priests=config.priests,
             )
             all_responses["cardinals"].extend(cardinal_responses_2)
             cardinal_responses = cardinal_responses_2
@@ -2815,7 +3617,23 @@ def main():
         )
 
     # ================================================================
-    # Dissenting opinions (BALANCED+ — after verdict, before Fresh Eyes)
+    # Majority Opinion synthesis (T2+ — consolidate individual verdicts)
+    # ================================================================
+    majority_opinion_response: Optional[ModelResponse] = None
+
+    if has_cardinals and cardinal_responses:
+        majority_opinion_response = synthesize_majority_opinion(
+            cardinal_responses=cardinal_responses,
+            briefing=briefing_text,
+            config=config,
+            session_dir=session_dir,
+            progress=progress,
+        )
+        if majority_opinion_response:
+            all_responses.setdefault("majority_opinion", []).append(majority_opinion_response)
+
+    # ================================================================
+    # Dissenting opinions (T2+ — after verdict, before Fresh Eyes)
     # ================================================================
     dissent_responses: list[ModelResponse] = []
 
@@ -2824,6 +3642,11 @@ def main():
             advocate_responses, debate_rounds, cardinal_responses
         )
         if dissenters:
+            # Use majority opinion for dissenters if available; fall back to raw opinions
+            _majority_text = ""
+            if majority_opinion_response and majority_opinion_response.status == "success":
+                _majority_text = majority_opinion_response.content or ""
+
             dissent_responses = run_dissent_phase(
                 dissenters=dissenters,
                 advocate_responses=advocate_responses,
@@ -2833,23 +3656,43 @@ def main():
                 config=config,
                 session_dir=session_dir,
                 progress=progress,
+                majority_opinion_text=_majority_text,
             )
             all_responses["dissents"] = dissent_responses
         else:
             progress.info("No dissenters detected — all advocates either conceded or were accepted.")
 
     # ================================================================
-    # Phase 7: Fresh Eyes (EXHAUSTIVE and NUCLEAR)
+    # Claim-Evidence Matrix extraction (T2+ — whenever judges exist)
+    # ================================================================
+    claim_matrix_response: Optional[ModelResponse] = None
+    if has_cardinals and cardinal_responses:
+        claim_matrix_response = extract_claim_evidence_matrix(
+            briefing=briefing_text,
+            advocate_responses=advocate_responses,
+            challenge_responses=challenge_responses,
+            debate_rounds=debate_rounds,
+            cardinal_responses=cardinal_responses,
+            config=config,
+            session_dir=session_dir,
+            progress=progress,
+        )
+        if claim_matrix_response:
+            all_responses["claim_matrix"] = [claim_matrix_response]
+
+    # ================================================================
+    # Phase 7: Fresh Eyes (T5 and T6)
     # ================================================================
     fresh_eyes_response: Optional[ModelResponse] = None
     seated_cardinal_ids = set()
     if has_cardinals:
         seated_cardinal_ids = {r.model_id for r in cardinal_responses}
 
-    if config.depth.name in ("EXHAUSTIVE", "NUCLEAR"):
+    if config.depth.name in ("T5", "T6"):
         prelim_output = build_final_output(
             advocate_responses, challenge_responses, debate_rounds,
             cardinal_responses, None, session_id, config,
+            majority_opinion_response=majority_opinion_response,
         )
         fresh_eyes_response = run_fresh_eyes_phase(
             briefing=briefing_text,
@@ -2863,7 +3706,7 @@ def main():
             all_responses["fresh_eyes"] = [fresh_eyes_response]
 
     # ================================================================
-    # Play-by-play narrative (BALANCED+)
+    # Play-by-play narrative (T2+)
     # ================================================================
     if config.depth.debate_rounds > 0:
         narrator_resps = generate_play_by_play(
@@ -2889,13 +3732,23 @@ def main():
         advocate_responses, challenge_responses, debate_rounds,
         cardinal_responses, fresh_eyes_response, session_id, config,
         dissent_responses=dissent_responses,
+        majority_opinion_response=majority_opinion_response,
     )
     (session_dir.meta / "final-output.md").write_text(final_output)
+
+    # Write full deliberation record for audit
+    council_record = build_council_record(
+        advocate_responses, challenge_responses, debate_rounds,
+        cardinal_responses, fresh_eyes_response, session_id, config,
+        dissent_responses=dissent_responses,
+        majority_opinion_response=majority_opinion_response,
+    )
+    (session_dir.meta / "council-record.md").write_text(council_record)
 
     write_debrief(all_responses, session_id, session_dir, config, wall_time, remand_count)
     write_council_log(all_responses, session_id, session_dir, config, wall_time, remand_count)
 
-    # ---- Session summary (BALANCED+ only) ----
+    # ---- Session summary (T2+ only) ----
     if config.depth.debate_rounds > 0:
         summary_resp = generate_session_summary(
             briefing=briefing_text,
@@ -2911,6 +3764,8 @@ def main():
             wall_time=wall_time,
             remand_count=remand_count,
             progress=progress,
+            majority_opinion_response=majority_opinion_response,
+            claim_matrix_response=claim_matrix_response,
         )
         if summary_resp:
             all_responses["summary"] = [summary_resp]
@@ -2977,6 +3832,11 @@ def main():
             print(f"  PDF:        {_summary_pdfs[-1]}")
         elif (session_dir / "session-summary.pdf").exists():
             print(f"  PDF:        {session_dir}/session-summary.pdf")
+        _exec_briefs = sorted(session_dir.glob("[0-9]*-exec-brief-*.pdf"))
+        if _exec_briefs:
+            print(f"  Brief:      {_exec_briefs[-1]}")
+        elif (session_dir / "exec-brief.pdf").exists():
+            print(f"  Brief:      {session_dir}/exec-brief.pdf")
         print(f"  Debrief:    {session_dir.narrative}/debrief.md")
         if (session_dir.narrative / "play-by-play.md").exists():
             print(f"  Play-by-play: {session_dir.narrative}/play-by-play.md")

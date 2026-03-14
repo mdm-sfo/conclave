@@ -21,7 +21,13 @@ The Tribunal is a structured multi-model deliberation system. Instead of asking 
 
 **Judges** (called Justices on The Bench) are separate models that never participated as advocates. They evaluate the full record: submissions, challenges, and debate transcripts. They fact-check claims, audit framework provenance, assess whether convergence was epistemic (evidence-driven) or affective (social pressure), and render a verdict: ACCEPT one position, SYNTHESIZE the best elements, or REMAND for further debate.
 
-**Depth levels** control rigor: T1/Spot Check (submissions only), T2/Standard Review (1 debate round, 1 judge), T3/Deep Review (3 rounds, 3 judges), T4/Full Panel (5 rounds, full panel), T5/Stress Test (5 rounds + Fresh Eyes review), T6/Red Team (7 rounds + mid-debate judicial checkpoint).
+**Depth levels** control rigor:
+- **T1/Spot Check** — submissions only
+- **T2/Standard Review** — 1 debate round, 1 judge
+- **T3/Deep Review** — 3 rounds, 3 judges
+- **T4/Full Panel** — 5 rounds, full panel
+- **T5/Stress Test** — 5 rounds + Fresh Eyes review
+- **T6/Red Team** — 7 rounds + mid-debate judicial checkpoint
 
 The system is deterministic code — it cannot be sycophantic. It dispatches prompts, collects responses, anonymizes identities, and enforces the adversarial structure. The models argue; the code referees.
 

@@ -19,6 +19,7 @@ from typing import Optional
 @dataclass
 class DepthConfig:
     name: str
+    subtitle: str             # human-readable subtitle (e.g., "Spot Check")
     advocates: int            # number of advocate models
     debate_rounds: int        # max debate rounds (0 = no debate)
     consensus_target: float   # agreement threshold to exit debate early
@@ -31,46 +32,51 @@ class DepthConfig:
     mid_debate_checkpoint: int = 0  # round after which to run judicial checkpoint (0 = none)
     position_stability_audit: bool = False  # whether to include flip-rate scorecard for judges
 
+    @property
+    def display_name(self) -> str:
+        """Human-readable name with subtitle, e.g. 'T3: Deep Review'."""
+        return f"{self.name}: {self.subtitle}"
+
 
 DEPTH_LEVELS: dict[str, DepthConfig] = {
-    "QUICK": DepthConfig(
-        name="QUICK",
+    "T1": DepthConfig(
+        name="T1", subtitle="Spot Check",
         advocates=2, debate_rounds=0, consensus_target=0.50,
         cardinals_bishops=0, cardinals_priests=0, cardinals_deacons=0,
         timeout_per_model=60, timeout_global=120,
         estimated_cost="~$0.10",
     ),
-    "BALANCED": DepthConfig(
-        name="BALANCED",
+    "T2": DepthConfig(
+        name="T2", subtitle="Standard Review",
         advocates=4, debate_rounds=1, consensus_target=0.66,
         cardinals_bishops=1, cardinals_priests=0, cardinals_deacons=0,
         timeout_per_model=120, timeout_global=480,
         estimated_cost="~$0.50",
     ),
-    "THOROUGH": DepthConfig(
-        name="THOROUGH",
+    "T3": DepthConfig(
+        name="T3", subtitle="Deep Review",
         advocates=5, debate_rounds=3, consensus_target=0.80,
         cardinals_bishops=2, cardinals_priests=1, cardinals_deacons=0,
         timeout_per_model=120, timeout_global=900,
         estimated_cost="~$2.00",
     ),
-    "RIGOROUS": DepthConfig(
-        name="RIGOROUS",
+    "T4": DepthConfig(
+        name="T4", subtitle="Full Panel",
         advocates=5, debate_rounds=5, consensus_target=0.90,
         cardinals_bishops=2, cardinals_priests=1, cardinals_deacons=1,
         timeout_per_model=150, timeout_global=1800,
         estimated_cost="~$5.00",
     ),
-    "EXHAUSTIVE": DepthConfig(
-        name="EXHAUSTIVE",
+    "T5": DepthConfig(
+        name="T5", subtitle="Stress Test",
         advocates=6, debate_rounds=5, consensus_target=0.95,
         cardinals_bishops=2, cardinals_priests=2, cardinals_deacons=1,
         timeout_per_model=180, timeout_global=2700,
         estimated_cost="~$10.00",
         position_stability_audit=True,
     ),
-    "NUCLEAR": DepthConfig(
-        name="NUCLEAR",
+    "T6": DepthConfig(
+        name="T6", subtitle="Red Team",
         advocates=6, debate_rounds=7, consensus_target=0.95,
         cardinals_bishops=2, cardinals_priests=2, cardinals_deacons=2,
         timeout_per_model=180, timeout_global=3600,
@@ -78,6 +84,16 @@ DEPTH_LEVELS: dict[str, DepthConfig] = {
         mid_debate_checkpoint=4,
         position_stability_audit=True,
     ),
+}
+
+# Backwards-compatible aliases (old names → new names)
+DEPTH_ALIASES: dict[str, str] = {
+    "QUICK": "T1",
+    "BALANCED": "T2",
+    "THOROUGH": "T3",
+    "RIGOROUS": "T4",
+    "EXHAUSTIVE": "T5",
+    "NUCLEAR": "T6",
 }
 
 
@@ -137,6 +153,15 @@ ADVOCATES: list[ModelDef] = [
         web_search=True,  # Google Search grounding — injected as tool at call time
     ),
     ModelDef(
+        id="deepseek-v3",
+        litellm_model="together_ai/deepseek-ai/DeepSeek-V3",
+        display_name="DeepSeek V3",
+        provider="DeepSeek (Together AI)",
+        role="advocate",
+        cost_tier="low",
+        env_key="TOGETHER_API_KEY",
+    ),
+    ModelDef(
         id="perplexity-sonar",
         litellm_model="perplexity/sonar-pro",
         display_name="Perplexity Sonar Pro",
@@ -146,18 +171,22 @@ ADVOCATES: list[ModelDef] = [
         env_key="PERPLEXITY_API_KEY",
         # search is always on in Sonar Pro — no web_search flag needed
     ),
-    ModelDef(
-        id="deepseek-v3",
-        litellm_model="together_ai/deepseek-ai/DeepSeek-V3",
-        display_name="DeepSeek V3",
-        provider="DeepSeek (Together AI)",
-        role="advocate",
-        cost_tier="low",
-        env_key="TOGETHER_API_KEY",
-    ),
 ]
 
-# --- Justices (permanent — always seated at THOROUGH+) ---
+# --- Fact Checker (dedicated — TODO: exclude from advocate pool when wired in) ---
+
+FACT_CHECKER: ModelDef = ModelDef(
+    id="perplexity-sonar",
+    litellm_model="perplexity/sonar-pro",
+    display_name="Perplexity Sonar Pro",
+    provider="Perplexity AI",
+    role="fact_checker",
+    cost_tier="medium",
+    env_key="PERPLEXITY_API_KEY",
+    # search is always on in Sonar Pro — no web_search flag needed
+)
+
+# --- Justices (permanent — always seated at T3+) ---
 
 BISHOPS: list[ModelDef] = [
     ModelDef(
@@ -193,10 +222,10 @@ BISHOPS: list[ModelDef] = [
     ),
 ]
 
-# --- Appellate Judges (rotation pool — randomly drawn at BALANCED+) ---
+# --- Appellate Judges (rotation pool — randomly drawn at T2+) ---
 
 PRIESTS: list[ModelDef] = [
-    # RNJ-1 REMOVED — 32K context too small for judicial duty at THOROUGH+.
+    # RNJ-1 REMOVED — 32K context too small for judicial duty at T3+.
     # Transcripts routinely exceed 33K tokens by the judicial review phase.
     ModelDef(
         id="priest-minimax",
@@ -228,9 +257,19 @@ PRIESTS: list[ModelDef] = [
         env_key="TOGETHER_API_KEY",
         context_window=202752,  # ~198K
     ),
+    ModelDef(
+        id="priest-mistral-large",
+        litellm_model="mistral/mistral-large-latest",
+        display_name="Mistral Large 3",
+        provider="Mistral AI",
+        role="priest",
+        cost_tier="medium",
+        env_key="MISTRAL_API_KEY",
+        context_window=131072,  # 128K
+    ),
 ]
 
-# --- Magistrate Judges (extended bench — drawn at RIGOROUS+) ---
+# --- Magistrate Judges (extended bench — drawn at T4+) ---
 
 DEACONS: list[ModelDef] = [
     ModelDef(
@@ -308,11 +347,12 @@ class ConclaveConfig:
     fireworks_api_key: Optional[str] = None
 
 
-def load_config(depth_name: str = "THOROUGH") -> ConclaveConfig:
+def load_config(depth_name: str = "T3") -> ConclaveConfig:
     """Load configuration from environment variables."""
 
-    # Resolve depth
+    # Resolve depth (with backwards-compatible alias support)
     depth_name = os.environ.get("CONCLAVE_DEFAULT_DEPTH", depth_name).upper()
+    depth_name = DEPTH_ALIASES.get(depth_name, depth_name)  # resolve old names
     if depth_name not in DEPTH_LEVELS:
         raise ValueError(f"Unknown depth: {depth_name}. Must be one of: {', '.join(DEPTH_LEVELS)}")
     depth = DEPTH_LEVELS[depth_name]
@@ -382,6 +422,11 @@ def load_config(depth_name: str = "THOROUGH") -> ConclaveConfig:
         needed = depth.advocates - len(available_advocates)
         available_advocates.extend(backfill[:needed])
 
+    # Filter priests by available API keys — Mistral priests skipped if MISTRAL_API_KEY not set
+    available_priests = [p for p in PRIESTS if os.environ.get(p.env_key)]
+    if not available_priests:
+        available_priests = list(PRIESTS)
+
     # Filter deacons by available API keys — Cerebras deacons are silently skipped
     # if CEREBRAS_API_KEY is not set, falling back to Together AI deacons only.
     available_deacons = [d for d in DEACONS if os.environ.get(d.env_key)]
@@ -392,7 +437,7 @@ def load_config(depth_name: str = "THOROUGH") -> ConclaveConfig:
         depth=depth,
         available_advocates=available_advocates,
         bishops=BISHOPS,
-        priests=PRIESTS,
+        priests=available_priests,
         deacons=available_deacons,
         log_dir=os.environ.get("TRIBUNAL_OUTPUT_DIR", "./conclave-sessions"),
         max_cost=float(os.environ.get("CONCLAVE_MAX_COST", "5.00")),

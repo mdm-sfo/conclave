@@ -33,6 +33,12 @@ import urllib.error
 from pathlib import Path
 from typing import Dict, List, Optional
 
+try:
+    from pydub import AudioSegment
+    HAS_PYDUB = True
+except ImportError:
+    HAS_PYDUB = False
+
 
 # ---------------------------------------------------------------------------
 # ElevenLabs Voice IDs (pre-made voices)
@@ -116,6 +122,7 @@ CHARACTER_DELIVERY = {
         "default": "[narrator]",
         "act_transitions": "[dramatic pause]",
         "reveals": "[slowly]",
+        "restore_order": "[firmly]",
     },
     "cardinal": {
         "default": "[seriously][measured pace]",
@@ -126,13 +133,19 @@ CHARACTER_DELIVERY = {
         "concede": "[reluctantly]",
         "defend": "[confidently]",
         "revise": "[thoughtfully]",
+        "heated": "[passionately]",
+        "interrupt": "[urgently]",
+        "sarcastic": "[sarcastically]",
     },
 }
 
 
-def detect_speech_event(text):
-    # type: (str) -> str
+def detect_speech_event(text, metadata=None):
+    # type: (str, Optional[dict]) -> str
     t = text.lower()
+    # Check interruption metadata first
+    if metadata and metadata.get("interrupts_previous"):
+        return "interrupt"
     if "conceding" in t or "concede" in t:
         return "concede"
     if "defending" in t or "defend" in t:
@@ -145,11 +158,18 @@ def detect_speech_event(text):
         return "reveals"
     if "convenes" in t or "deliberation" in t or "begins" in t:
         return "act_transitions"
+    if "please" in t and ("order" in t or "topic" in t or "let" in t):
+        return "restore_order"
+    # Detect heated speech patterns
+    if "NOT " in text or "THERE it is" in text or "serious" in t:
+        return "heated"
+    if "brilliant" in t and ("oh" in t or "truly" in t):
+        return "sarcastic"
     return "default"
 
 
-def get_delivery_tag(character, text):
-    # type: (str, str) -> str
+def get_delivery_tag(character, text, metadata=None):
+    # type: (str, str, Optional[dict]) -> str
     if character == "moderator":
         role_tags = CHARACTER_DELIVERY.get("moderator", {})
     elif character.startswith("cardinal"):
@@ -159,7 +179,7 @@ def get_delivery_tag(character, text):
     else:
         return ""
 
-    event = detect_speech_event(text)
+    event = detect_speech_event(text, metadata)
     tag = role_tags.get(event, role_tags.get("default", ""))
     return tag.strip()
 
@@ -328,9 +348,88 @@ def print_cast_sheet(voice_script, voice_map):
     print(file=sys.stderr)
 
 
+def stitch_audio_with_overlaps(segments, output_path):
+    # type: (List[dict], str) -> bool
+    """
+    Stitch audio segments with support for overlapping/interrupted speech.
+    Uses pydub for timeline-based mixing.
+
+    Each segment dict has:
+      - path: str — path to the MP3 file
+      - interrupts_previous: bool — should overlap with the previous segment
+      - overlap_ms: int — how much to overlap (ms)
+    """
+    if not segments or not HAS_PYDUB:
+        return False
+
+    # Load all clips
+    clips = []
+    for seg in segments:
+        try:
+            clips.append({
+                "audio": AudioSegment.from_mp3(seg["path"]),
+                "interrupts_previous": seg.get("interrupts_previous", False),
+                "overlap_ms": seg.get("overlap_ms", 0),
+            })
+        except Exception as e:
+            print(f"  [!] pydub: failed to load {seg['path']}: {e}", file=sys.stderr)
+            continue
+
+    if not clips:
+        return False
+
+    # Build timeline with overlaps
+    timeline = clips[0]["audio"]
+
+    # If the first clip is about to be interrupted, truncate it
+    if len(clips) > 1 and clips[1].get("interrupts_previous"):
+        cut_point = int(len(timeline) * 0.85)
+        if cut_point > 300:
+            timeline = timeline[:cut_point].fade_out(300)
+
+    for i in range(1, len(clips)):
+        clip = clips[i]
+        audio = clip["audio"]
+
+        # Check if the NEXT clip will interrupt this one — truncate if so
+        next_interrupts = (
+            i + 1 < len(clips) and clips[i + 1].get("interrupts_previous")
+        )
+
+        if clip["interrupts_previous"] and clip["overlap_ms"] > 0 and len(timeline) > 0:
+            overlap = min(clip["overlap_ms"], len(timeline))
+            position = len(timeline) - overlap
+
+            # Extend timeline if the new audio goes beyond current end
+            needed_length = position + len(audio)
+            if needed_length > len(timeline):
+                timeline = timeline + AudioSegment.silent(
+                    duration=needed_length - len(timeline)
+                )
+            timeline = timeline.overlay(audio, position=position)
+        else:
+            timeline = timeline + audio
+
+        # Truncate this clip's contribution if the next one interrupts
+        if next_interrupts:
+            # Find where this clip ends in the timeline and trim
+            trim_point = int(len(timeline) * 0.97)  # slight trim
+            if len(timeline) - trim_point > 300:
+                timeline = timeline[:trim_point].fade_out(200) + AudioSegment.silent(
+                    duration=50
+                )
+
+    try:
+        timeline.export(output_path, format="mp3", bitrate="192k")
+        return True
+    except Exception as e:
+        print(f"  [!] pydub export failed: {e}", file=sys.stderr)
+        return False
+
+
 def stitch_audio(part_paths, output_path):
     # type: (List[str], str) -> bool
-    """Concatenate MP3 files using ffmpeg."""
+    """Concatenate MP3 files using ffmpeg (fallback when pydub unavailable)."""
     if not part_paths:
         return False
 
@@ -434,15 +533,24 @@ def run_pipeline(
     voice_map = resolve_voice_map(voice_script, custom_map)
     print_cast_sheet(voice_script, voice_map)
 
-    # Prepare dialogue with tags
+    # Prepare dialogue with tags and interruption metadata
     dialogue = []
+    has_overlaps = False
     for line in lines:
         char = line["character"]
         text = line["text"]
         voice = voice_map.get(char, FALLBACK_VOICE)
+        metadata = {
+            "interrupts_previous": line.get("interrupts_previous", False),
+            "is_interrupted": line.get("is_interrupted", False),
+            "overlap_ms": line.get("overlap_ms", 0),
+        }
+
+        if metadata["interrupts_previous"]:
+            has_overlaps = True
 
         if add_tags:
-            tag = get_delivery_tag(char, text)
+            tag = get_delivery_tag(char, text, metadata)
             if tag:
                 text = f"{tag} {text}"
 
@@ -450,14 +558,32 @@ def run_pipeline(
             "character": char,
             "voice": voice,
             "text": text,
+            **metadata,
         })
+
+    if has_overlaps and HAS_PYDUB:
+        print("[tts] Overlap mode: pydub available — will mix interruptions", file=sys.stderr)
+    elif has_overlaps:
+        print(
+            "[tts] Warning: voice-script has interruptions but pydub not installed. "
+            "Install with: pip install pydub. Falling back to simple concat.",
+            file=sys.stderr,
+        )
 
     if dry_run:
         print("\n[tts] Dry run — dialogue preview:\n", file=sys.stderr)
         for i, d in enumerate(dialogue):
+            marker = ""
+            if d.get("interrupts_previous"):
+                marker = "[INT] "
+            elif d.get("is_interrupted"):
+                marker = "[CUT] "
             preview = d["text"][:100] + ("..." if len(d["text"]) > 100 else "")
-            print(f"  [{i+1:2d}] {d['voice']:8s} ({d['character']}) | {preview}", file=sys.stderr)
+            print(f"  [{i+1:2d}] {d['voice']:8s} ({d['character']}) | {marker}{preview}", file=sys.stderr)
         print(f"\n[tts] Would generate {len(dialogue)} audio segments.", file=sys.stderr)
+        if has_overlaps:
+            overlap_count = sum(1 for d in dialogue if d.get("interrupts_previous"))
+            print(f"  Interruptions/overlaps: {overlap_count}", file=sys.stderr)
         return 0
 
     # Determine output path
@@ -466,7 +592,7 @@ def run_pipeline(
 
     # Create temp dir for per-line audio files
     with tempfile.TemporaryDirectory(prefix="tribunal-tts-") as tmpdir:
-        part_paths = []
+        successful_segments = []  # list of dicts with path + metadata
         failed = 0
         start_time = time.time()
 
@@ -486,7 +612,12 @@ def run_pipeline(
             )
 
             if ok:
-                part_paths.append(part_path)
+                successful_segments.append({
+                    "path": part_path,
+                    "interrupts_previous": d.get("interrupts_previous", False),
+                    "is_interrupted": d.get("is_interrupted", False),
+                    "overlap_ms": d.get("overlap_ms", 0),
+                })
                 # Brief pause between API calls to avoid rate limits
                 if line_num < len(dialogue):
                     time.sleep(0.3)
@@ -506,14 +637,26 @@ def run_pipeline(
                     file=sys.stderr,
                 )
 
-        if not part_paths:
+        if not successful_segments:
             print("[tts] Error: No audio segments generated", file=sys.stderr)
             return 1
 
-        # Stitch
+        # Stitch — use pydub overlap mixing if available, else ffmpeg concat
+        part_paths = [s["path"] for s in successful_segments]
         print(f"\n[tts] Stitching {len(part_paths)} segments...", file=sys.stderr)
-        if not stitch_audio(part_paths, str(output_path)):
-            print("[tts] Error: ffmpeg stitch failed", file=sys.stderr)
+
+        stitch_ok = False
+        if has_overlaps and HAS_PYDUB:
+            print("[tts] Using pydub for overlap mixing...", file=sys.stderr)
+            stitch_ok = stitch_audio_with_overlaps(successful_segments, str(output_path))
+            if not stitch_ok:
+                print("[tts] pydub stitch failed, falling back to ffmpeg concat...", file=sys.stderr)
+
+        if not stitch_ok:
+            stitch_ok = stitch_audio(part_paths, str(output_path))
+
+        if not stitch_ok:
+            print("[tts] Error: audio stitch failed", file=sys.stderr)
             return 1
 
     # Report
@@ -528,7 +671,7 @@ def run_pipeline(
         seconds = int(duration % 60)
         print(f"  Duration: {minutes}:{seconds:02d}", file=sys.stderr)
     print(f"  Size: {size_mb:.1f} MB", file=sys.stderr)
-    print(f"  Lines: {len(part_paths)} ok, {failed} failed", file=sys.stderr)
+    print(f"  Lines: {len(successful_segments)} ok, {failed} failed", file=sys.stderr)
     print(f"  Pipeline time: {elapsed:.0f}s", file=sys.stderr)
 
     return 0
