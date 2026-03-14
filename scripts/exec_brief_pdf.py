@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-The Tribunal — Executive Brief (2-page PDF).
+The Tribunal — Executive Brief (1–2 page PDF).
 
-Reads a session-summary.md and distills it into a dense, two-page PDF
-designed for a smart, busy reader who needs the signal without the noise.
+Reads a session-summary.md and distills it into a structured, scannable
+executive brief. Designed for a smart, busy reader — think Goldman research
+flash note or McKinsey one-pager. Heavy use of bullets, bold lead-ins,
+no paragraph walls.
 
-Page 1: What was asked, what was decided, and why — the analytical core.
-Page 2: How the panel got there, what's still open, and what to do next.
+Page 1: Question, Ruling, Key Evidence, What Was Rejected
+Page 2: Open Questions / Risks, Panel Snapshot, Process Metadata
 
 Standalone usage:
     python exec_brief_pdf.py /path/to/session-summary.md [output.pdf]
@@ -33,7 +35,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY, TA_RIGHT
 from reportlab.platypus import (
     Paragraph, Spacer, Table, TableStyle,
-    Frame, PageTemplate, BaseDocTemplate, Flowable,
+    Frame, PageTemplate, BaseDocTemplate, Flowable, KeepTogether,
 )
 
 # Re-use the session-summary parser from the full PDF generator
@@ -43,7 +45,7 @@ from summary_pdf import (
 )
 
 # ---------------------------------------------------------------------------
-# Color palette — same academic aesthetic as the full PDF
+# Color palette — same academic aesthetic, tighter spacing
 # ---------------------------------------------------------------------------
 NAVY       = HexColor("#0D1B2A")
 DARK_BLUE  = HexColor("#1B2A4A")
@@ -61,8 +63,8 @@ RULE_COLOR = HexColor("#C0B8A8")
 WHITE      = HexColor("#FFFFFF")
 
 PAGE_W, PAGE_H = letter
-LEFT_MARGIN = 0.7 * inch
-RIGHT_MARGIN = 0.7 * inch
+LEFT_MARGIN = 0.75 * inch
+RIGHT_MARGIN = 0.75 * inch
 TOP_MARGIN = 0.65 * inch
 BOTTOM_MARGIN = 0.6 * inch
 CONTENT_W = PAGE_W - LEFT_MARGIN - RIGHT_MARGIN
@@ -100,8 +102,8 @@ class AccentBar(Flowable):
         self.canv.line(0, 2.5, self.width, 2.5)
 
 
-class CalloutBox(Flowable):
-    """Compact callout box with left accent bar."""
+class RulingBox(Flowable):
+    """Highlighted ruling box with left accent bar — the money quote."""
     def __init__(self, text, width, style, bg_color=LIGHT_GRAY, accent_color=ACCENT):
         Flowable.__init__(self)
         self.text = text
@@ -110,74 +112,70 @@ class CalloutBox(Flowable):
         self.bg_color = bg_color
         self.accent_color = accent_color
         p = Paragraph(text, style)
-        w, h = p.wrap(width - 20, 1000)
-        self.box_height = h + 14
+        w, h = p.wrap(width - 24, 1000)
+        self.box_height = h + 16
 
     def wrap(self, availWidth, availHeight):
         return self.box_width, self.box_height
 
     def draw(self):
         self.canv.setFillColor(self.bg_color)
-        self.canv.roundRect(0, 0, self.box_width, self.box_height, 2, fill=1, stroke=0)
+        self.canv.roundRect(0, 0, self.box_width, self.box_height, 3, fill=1, stroke=0)
         self.canv.setFillColor(self.accent_color)
-        self.canv.rect(0, 0, 3, self.box_height, fill=1, stroke=0)
+        self.canv.rect(0, 0, 4, self.box_height, fill=1, stroke=0)
         p = Paragraph(self.text, self.style)
-        p.wrap(self.box_width - 20, self.box_height)
-        p.drawOn(self.canv, 14, 7)
+        p.wrap(self.box_width - 24, self.box_height)
+        p.drawOn(self.canv, 16, 8)
 
 
 # ---------------------------------------------------------------------------
-# Styles — tighter than the full PDF for density
+# Styles
 # ---------------------------------------------------------------------------
 
 def build_styles():
     s = {}
 
     s['title'] = ParagraphStyle(
-        'BriefTitle', fontName='Helvetica-Bold', fontSize=16, leading=19,
+        'BriefTitle', fontName='Helvetica-Bold', fontSize=15, leading=18,
         textColor=NAVY, spaceAfter=1, alignment=TA_LEFT,
     )
     s['subtitle'] = ParagraphStyle(
-        'BriefSubtitle', fontName='Helvetica', fontSize=8.5, leading=11,
-        textColor=MUTED, spaceAfter=1, alignment=TA_LEFT,
+        'BriefSubtitle', fontName='Helvetica', fontSize=8, leading=10,
+        textColor=MUTED, spaceAfter=0, alignment=TA_LEFT,
     )
-    s['h1'] = ParagraphStyle(
-        'BriefH1', fontName='Helvetica-Bold', fontSize=11.5, leading=14,
-        textColor=NAVY, spaceBefore=8, spaceAfter=3, alignment=TA_LEFT,
+    s['section'] = ParagraphStyle(
+        'BriefSection', fontName='Helvetica-Bold', fontSize=10.5, leading=13,
+        textColor=NAVY, spaceBefore=10, spaceAfter=3, alignment=TA_LEFT,
     )
-    s['h2'] = ParagraphStyle(
-        'BriefH2', fontName='Helvetica-Bold', fontSize=9.5, leading=12,
+    s['subsection'] = ParagraphStyle(
+        'BriefSubsection', fontName='Helvetica-Bold', fontSize=9, leading=12,
         textColor=DARK_BLUE, spaceBefore=6, spaceAfter=2, alignment=TA_LEFT,
     )
     s['body'] = ParagraphStyle(
         'BriefBody', fontName='Helvetica', fontSize=8.5, leading=12,
         textColor=TEXT_COLOR, spaceAfter=4, alignment=TA_JUSTIFY,
     )
-    s['body_small'] = ParagraphStyle(
-        'BriefBodySmall', fontName='Helvetica', fontSize=8, leading=11,
-        textColor=TEXT_COLOR, spaceAfter=3, alignment=TA_JUSTIFY,
-    )
     s['ruling'] = ParagraphStyle(
-        'BriefRuling', fontName='Helvetica-Bold', fontSize=9, leading=13,
-        textColor=TEXT_COLOR, spaceAfter=4, alignment=TA_LEFT,
+        'BriefRuling', fontName='Helvetica', fontSize=9, leading=13,
+        textColor=TEXT_COLOR, spaceAfter=0, alignment=TA_LEFT,
     )
     s['bullet'] = ParagraphStyle(
-        'BriefBullet', fontName='Helvetica', fontSize=8.5, leading=11.5,
-        textColor=TEXT_COLOR, spaceAfter=2, leftIndent=12, bulletIndent=2,
+        'BriefBullet', fontName='Helvetica', fontSize=8.5, leading=12,
+        textColor=TEXT_COLOR, spaceAfter=3, leftIndent=14, bulletIndent=2,
         alignment=TA_LEFT,
     )
-    s['bullet_small'] = ParagraphStyle(
-        'BriefBulletSmall', fontName='Helvetica', fontSize=8, leading=11,
-        textColor=TEXT_COLOR, spaceAfter=2, leftIndent=12, bulletIndent=2,
+    s['numbered'] = ParagraphStyle(
+        'BriefNumbered', fontName='Helvetica', fontSize=8.5, leading=12,
+        textColor=TEXT_COLOR, spaceAfter=3, leftIndent=18, bulletIndent=2,
         alignment=TA_LEFT,
-    )
-    s['callout'] = ParagraphStyle(
-        'BriefCallout', fontName='Helvetica', fontSize=8.5, leading=12,
-        textColor=TEXT_COLOR, alignment=TA_LEFT,
     )
     s['meta'] = ParagraphStyle(
-        'BriefMeta', fontName='Helvetica', fontSize=7, leading=9,
+        'BriefMeta', fontName='Helvetica', fontSize=7.5, leading=10,
         textColor=MUTED, spaceAfter=1, alignment=TA_LEFT,
+    )
+    s['question'] = ParagraphStyle(
+        'BriefQuestion', fontName='Helvetica-Oblique', fontSize=9, leading=13,
+        textColor=DARK_GRAY, spaceAfter=4, alignment=TA_LEFT,
     )
     s['table_header'] = ParagraphStyle(
         'BriefTH', fontName='Helvetica-Bold', fontSize=7.5, leading=10,
@@ -191,9 +189,13 @@ def build_styles():
         'BriefTCB', fontName='Helvetica-Bold', fontSize=7.5, leading=10,
         textColor=TEXT_COLOR, alignment=TA_LEFT,
     )
-    s['footer'] = ParagraphStyle(
-        'BriefFooter', fontName='Helvetica', fontSize=6.5, leading=8,
-        textColor=MUTED, alignment=TA_CENTER,
+    s['dissent_label'] = ParagraphStyle(
+        'BriefDissentLabel', fontName='Helvetica-Bold', fontSize=8, leading=11,
+        textColor=ACCENT, spaceAfter=1, alignment=TA_LEFT,
+    )
+    s['footer_note'] = ParagraphStyle(
+        'BriefFooterNote', fontName='Helvetica-Oblique', fontSize=7, leading=9,
+        textColor=MUTED, spaceAfter=0, alignment=TA_LEFT,
     )
 
     return s
@@ -204,11 +206,12 @@ def build_styles():
 # ---------------------------------------------------------------------------
 
 class ExecBriefTemplate(BaseDocTemplate):
-    """Two-page executive brief with branded header/footer."""
+    """Executive brief with branded header/footer."""
 
     def __init__(self, filename, session_meta=None, **kwargs):
         BaseDocTemplate.__init__(self, filename, **kwargs)
         self.session_meta = session_meta or {}
+        self._saved_page_count = 0
 
         frame = Frame(
             LEFT_MARGIN, BOTTOM_MARGIN,
@@ -220,35 +223,40 @@ class ExecBriefTemplate(BaseDocTemplate):
 
     def _draw_page(self, canvas, doc):
         canvas.saveState()
+        self._saved_page_count = max(self._saved_page_count, canvas.getPageNumber())
 
-        # Top rule
+        # Top double rule
         canvas.setStrokeColor(NAVY)
         canvas.setLineWidth(1.5)
         canvas.line(LEFT_MARGIN, PAGE_H - TOP_MARGIN + 10,
                     PAGE_W - RIGHT_MARGIN, PAGE_H - TOP_MARGIN + 10)
+        canvas.setStrokeColor(RULE_COLOR)
+        canvas.setLineWidth(0.4)
+        canvas.line(LEFT_MARGIN, PAGE_H - TOP_MARGIN + 7,
+                    PAGE_W - RIGHT_MARGIN, PAGE_H - TOP_MARGIN + 7)
 
         # Header text
-        canvas.setFont('Helvetica-Bold', 7)
+        canvas.setFont('Helvetica-Bold', 6.5)
         canvas.setFillColor(NAVY)
         canvas.drawString(LEFT_MARGIN, PAGE_H - TOP_MARGIN + 14,
-                          "THE TRIBUNAL — EXECUTIVE BRIEF")
+                          "THE TRIBUNAL \u2014 EXECUTIVE BRIEF")
 
         session_id = self.session_meta.get("session_id", "")
         if session_id:
-            canvas.setFont('Helvetica', 6.5)
+            canvas.setFont('Helvetica', 6)
             canvas.setFillColor(MUTED)
             canvas.drawRightString(PAGE_W - RIGHT_MARGIN, PAGE_H - TOP_MARGIN + 14,
                                    session_id)
 
         # Bottom rule
         canvas.setStrokeColor(RULE_COLOR)
-        canvas.setLineWidth(0.5)
+        canvas.setLineWidth(0.4)
         canvas.line(LEFT_MARGIN, BOTTOM_MARGIN - 6,
                     PAGE_W - RIGHT_MARGIN, BOTTOM_MARGIN - 6)
 
-        # Page number (dynamic total via second pass)
+        # Page number
         page_num = canvas.getPageNumber()
-        canvas.setFont('Helvetica', 7)
+        canvas.setFont('Helvetica', 6.5)
         canvas.setFillColor(MUTED)
         canvas.drawCentredString(PAGE_W / 2, BOTTOM_MARGIN - 16,
                                  "Page %d" % page_num)
@@ -257,106 +265,172 @@ class ExecBriefTemplate(BaseDocTemplate):
         canvas.setFont('Helvetica', 5.5)
         canvas.setFillColor(HexColor("#999999"))
         canvas.drawRightString(PAGE_W - RIGHT_MARGIN, BOTTOM_MARGIN - 16,
-                               "The Tribunal — github.com/mdm-sfo/tribunal")
+                               "The Tribunal \u2014 github.com/mdm-sfo/tribunal")
 
         canvas.restoreState()
 
 
 # ---------------------------------------------------------------------------
-# Content helpers
+# Content extraction helpers
 # ---------------------------------------------------------------------------
 
-def _truncate_text(text, max_chars=600):
-    """Truncate text to max_chars, breaking at sentence boundary."""
-    if not text or len(text) <= max_chars:
-        return text
-    # Try to break at a sentence boundary
-    truncated = text[:max_chars]
-    last_period = truncated.rfind(". ")
-    if last_period > max_chars * 0.5:
-        return truncated[:last_period + 1]
-    return truncated.rstrip() + "..."
-
-
-def _extract_ruling(bottom_line_text):
-    """Extract the **Ruling:** line and the explanation separately."""
+def _extract_ruling_line(bottom_line_text):
+    """Pull just the **Ruling:** sentence(s) — the money quote."""
     if not bottom_line_text:
-        return "", ""
-
-    lines = bottom_line_text.strip().split("\n")
-    ruling_lines = []
-    explanation_lines = []
-    in_ruling = False
-
-    for line in lines:
+        return ""
+    for line in bottom_line_text.split("\n"):
         stripped = line.strip()
-        if stripped.startswith("**Ruling:**") or stripped.startswith("**Ruling**:"):
-            in_ruling = True
-            # Extract text after the Ruling: prefix
-            after = re.sub(r'^\*\*Ruling\*?\*?:?\s*', '', stripped).strip()
-            if after:
-                ruling_lines.append(after)
-        elif in_ruling and stripped and not stripped.startswith("**") and not stripped.startswith("#"):
-            # Continuation of ruling (still in the bold intro)
-            ruling_lines.append(stripped)
-        else:
-            in_ruling = False
-            if stripped:
-                explanation_lines.append(stripped)
-
-    ruling = " ".join(ruling_lines).strip()
-    explanation = "\n".join(explanation_lines).strip()
-
-    # If no explicit Ruling: prefix found, use first paragraph as ruling
-    if not ruling:
-        paragraphs = bottom_line_text.strip().split("\n\n")
-        if paragraphs:
-            ruling = paragraphs[0].replace("\n", " ").strip()
-            explanation = "\n\n".join(paragraphs[1:]).strip()
-
-    return ruling, explanation
+        if "Ruling" in stripped[:20] and stripped.startswith("**"):
+            # Strip all variants: **Ruling:** , **Ruling**: , **Ruling**:
+            result = re.sub(r'^\*{1,2}Ruling\*{0,2}:?\s*\*{0,2}:?\s*', '', stripped).strip()
+            # Clean any remaining leading asterisks or colons
+            result = result.lstrip("*: ").strip()
+            return result
+    # Fallback: first sentence
+    first_para = bottom_line_text.strip().split("\n\n")[0]
+    return first_para.replace("\n", " ").strip()
 
 
-def _render_compact_markdown(text, styles, max_paragraphs=None):
-    """Render markdown text as compact flowables."""
-    flowables = []
+_MODEL_RE = (
+    r"(?:Perplexity Sonar Pro|GPT-5|GPT-OSS 120B|Gemini 2\.5 Pro|Claude Sonnet|"
+    r"DeepSeek (?:V3|R1)|Qwen 3(?:\.5)?\s*(?:235B|397B)?(?:\s*\([^)]*\))?|"
+    r"Zhipu GLM-[\d.]+|Kimi K2(?:\s+Instruct)?|MiniMax M[\d.]+|"
+    r"Essential AI RNJ-1|Advocate-[A-Z]|Judge-[A-Z])"
+)
+
+
+def _strip_model_attribution(text):
+    """Aggressively remove all model names, vote counts, and Tribunal process language.
+
+    The brief should read as pure analysis — no reader needs to know which AI said what.
+    """
     if not text:
-        return flowables
+        return text
 
-    paragraphs = re.split(r'\n\n+', text.strip())
-    if max_paragraphs:
-        paragraphs = paragraphs[:max_paragraphs]
+    # Remove any parenthetical containing model names or process attribution
+    text = re.sub(r'\s*\([^)]*(?:supported by|consensus across|accepted by)[^)]*\)', '', text, flags=re.I)
+    # Remove parentheticals that are just model name lists
+    text = re.sub(r'\s*\(' + _MODEL_RE + r'(?:[,\s]+(?:and\s+)?' + _MODEL_RE + r')*\s*\)', '', text)
 
-    for para in paragraphs:
-        para = para.strip()
-        if not para:
+    # Remove "From ModelName[, ModelName...][)]:" prefixes
+    text = re.sub(r'From\s+' + _MODEL_RE + r'(?:[,\s]+(?:and\s+)?' + _MODEL_RE + r')*\s*\)?\s*:\s*', '', text)
+
+    # Remove "ModelName argues/emphasizes/notes that" sentence openers
+    text = re.sub(
+        _MODEL_RE + r'\s+(?:argues?|emphasizes?|notes?|contends?|claims?|maintains?)\s+that\s+',
+        '', text, flags=re.I,
+    )
+
+    # Remove "ModelName's thesis/position" possessives
+    text = re.sub(
+        _MODEL_RE + r"'s\s+(?:thesis|position|model|power infrastructure arbitrage thesis)",
+        "the thesis", text, flags=re.I,
+    )
+
+    # Remove ", as conceded by all advocates" type trailing clauses
+    text = re.sub(r',?\s*as conceded by\s+(?:all\s+)?(?:advocates?|' + _MODEL_RE + r')', '', text, flags=re.I)
+
+    # Filter vote-count and process-focused lines
+    lines = []
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if re.search(r'judges?\s+accepted|majority\s+accept|vote\s+in\s+favor|\d\s+out\s+of\s+\d', stripped, re.I):
             continue
-
-        # Bullet list
-        if para.startswith("- ") or para.startswith("* "):
-            for bullet in _parse_bullets(para):
-                flowables.append(Paragraph(
-                    "<bullet>&bull;</bullet> " + _md_inline_to_xml(bullet),
-                    styles['bullet_small'],
-                ))
+        if re.search(r'no\s+judge\s+accepted|only\s+\w+\s+received\s+majority', stripped, re.I):
             continue
-
-        # Numbered list
-        if re.match(r'^\d+\.\s+', para):
-            for bullet in _parse_bullets(para):
-                flowables.append(Paragraph(
-                    "<bullet>&bull;</bullet> " + _md_inline_to_xml(bullet),
-                    styles['bullet_small'],
-                ))
+        if re.search(r'position\s+across\s+the\s+Bench|majority-supported\s+foundation', stripped, re.I):
             continue
+        lines.append(line)
+    text = "\n".join(lines)
 
-        # Regular paragraph
-        flowables.append(Paragraph(
-            _md_inline_to_xml(para.replace("\n", " ")),
-            styles['body_small'],
-        ))
+    # Final pass: scrub any remaining standalone model name references
+    text = re.sub(_MODEL_RE + r"'s\s+", '', text)  # possessives
+    text = re.sub(r',?\s*' + _MODEL_RE + r'(?:\s*,\s*' + _MODEL_RE + r')*\s*\)?', '', text)
 
-    return flowables
+    # Cleanup artifacts: empty parens, dangling commas/colons, double spaces
+    text = re.sub(r'\(\s*\)', '', text)
+    text = re.sub(r',\s*\)', ')', text)
+    text = re.sub(r'\(\s*,', '(', text)
+    text = re.sub(r',\s*:', ':', text)
+    text = re.sub(r'\s{2,}', ' ', text)
+    text = re.sub(r'\s+([.,;:])', r'\1', text)
+    text = re.sub(r'^\s*,\s*', '', text)
+    # Capitalize first letter after stripping a sentence opener
+    text = re.sub(r'^([a-z])', lambda m: m.group(1).upper(), text)
+
+    return text.strip()
+
+
+def _extract_numbered_points(text, max_points=5):
+    """Extract numbered or bulleted points from markdown text."""
+    points = []
+    for line in text.strip().split("\n"):
+        stripped = line.strip()
+        m = re.match(r'^(?:\d+\.\s+|\-\s+|\*\s+)(.*)', stripped)
+        if m:
+            points.append(m.group(1).strip())
+    return points[:max_points]
+
+
+def _extract_rejected_items(bottom_line_text):
+    """Extract 'this synthesis does not adopt' items from the bottom line."""
+    items = []
+    in_rejected = False
+    for line in bottom_line_text.split("\n"):
+        stripped = line.strip()
+        if "does not adopt" in stripped.lower() or "rejected" in stripped.lower():
+            in_rejected = True
+            continue
+        if in_rejected and stripped.startswith("- "):
+            items.append(stripped[2:].strip())
+        elif in_rejected and stripped.startswith("Instead"):
+            break
+        elif in_rejected and not stripped:
+            if items:
+                break
+    return items
+
+
+def _extract_key_evidence(bottom_line_text, max_points=4):
+    """Extract the key synthesis elements (numbered points) from bottom line.
+
+    Strips model attribution. Extracts the concept name from the text if the
+    label is just a model attribution.
+    """
+    points = []
+    for line in bottom_line_text.split("\n"):
+        stripped = line.strip()
+        m = re.match(r'^\d+\.\s+\*\*(.+?)\*\*[:\s]*(.*)', stripped)
+        if m:
+            label = m.group(1).strip()
+            rest = m.group(2).strip()
+
+            # Strip model attribution from label
+            label = _strip_model_attribution(label).strip()
+
+            # If label starts with "From" or is now empty, extract concept from content
+            if not label or label.lower().startswith("from") or len(label) < 5:
+                concept_m = re.search(r'\*\*(.+?)\*\*', rest)
+                if concept_m:
+                    label = concept_m.group(1).strip()
+                else:
+                    label = "Key element %d" % (len(points) + 1)
+
+            # Capitalize first letter
+            if label and label[0].islower():
+                label = label[0].upper() + label[1:]
+
+            # Strip model attribution from rest text
+            rest = _strip_model_attribution(rest)
+
+            if len(rest) > 280:
+                last_period = rest[:280].rfind(". ")
+                if last_period > 140:
+                    rest = rest[:last_period + 1]
+                else:
+                    rest = rest[:277] + "..."
+            points.append(("<b>%s:</b> %s" % (_escape_xml(label), _md_inline_to_xml(rest))))
+    return points[:max_points]
 
 
 def _make_compact_table(headers, rows, col_widths, styles):
@@ -394,148 +468,260 @@ def _make_compact_table(headers, rows, col_widths, styles):
 
 
 # ---------------------------------------------------------------------------
-# Story builder — the 2-page layout
+# Story builder
 # ---------------------------------------------------------------------------
 
+def _extract_analysis_paragraphs(bottom_line_text, max_paras=2):
+    """Extract the analytical 'why' paragraphs from the bottom line.
+
+    Skips the Ruling: line, process/vote-count paragraphs, and rejection lists.
+    Strips model attribution to focus on substance.
+    Returns prose paragraphs that explain the reasoning.
+    """
+    paragraphs = bottom_line_text.strip().split("\n\n")
+    result = []
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        # Skip the ruling line
+        if para.startswith("**Ruling"):
+            continue
+        # Skip rejection lists
+        if "does not adopt" in para.lower() or "instead, the court" in para.lower():
+            continue
+        # Skip bare bullet lists (rejected items)
+        if all(line.strip().startswith("- ") for line in para.split("\n") if line.strip()):
+            continue
+        # Skip numbered evidence items (these go in the evidence section)
+        if re.match(r'^\d+\.\s+\*\*', para.strip()):
+            continue
+        # Skip paragraphs that are primarily about judicial vote counts
+        if re.search(r'(?:judges?\s+accepted|majority\s+position\s+across\s+the\s+Bench|out\s+of\s+\d\))', para, re.I):
+            continue
+        # Skip the "The synthesis incorporates..." bridge sentence
+        if para.startswith("The synthesis incorporates"):
+            continue
+
+        cleaned = _strip_model_attribution(para.replace("\n", " "))
+        if cleaned and len(cleaned) > 40:
+            result.append(cleaned)
+        if len(result) >= max_paras:
+            break
+    return result
+
+
+def _extract_risks_and_caveats(parsed):
+    """Build a list of risks/caveats from dissents.
+
+    Focuses on the core disagreements — what a decision-maker needs to watch.
+    Strips model attribution.
+    """
+    risks = []
+
+    # From dissenting opinions — the core counter-arguments
+    dissent_text = parsed.get("dissenting_opinions", "")
+    if dissent_text:
+        for block in re.split(r'###\s+', dissent_text):
+            block = block.strip()
+            if not block:
+                continue
+            for line in block.split("\n"):
+                stripped = line.strip()
+                for prefix in ("**Core Disagreement:**", "**Strongest Evidence:**"):
+                    if stripped.startswith(prefix):
+                        text = stripped.replace(prefix, "").strip()
+                        if text and len(text) > 30:
+                            risks.append(_strip_model_attribution(text))
+
+    # Deduplicate similar risks (keep first occurrence)
+    seen = set()
+    unique_risks = []
+    for r in risks:
+        # Simple dedup: check if first 50 chars are similar
+        key = r[:50].lower()
+        if key not in seen:
+            seen.add(key)
+            unique_risks.append(r)
+
+    return unique_risks[:4]
+
+
 def _build_brief_story(parsed, styles):
-    """Build the two-page executive brief story."""
+    """Build the executive brief story — substance over process."""
     story = []
     meta = parsed["header_meta"]
 
     # ==================================================================
-    # PAGE 1: The Decision
+    # HEADER
     # ==================================================================
-
-    # --- Header block ---
     story.append(Paragraph("Executive Brief", styles['title']))
-    story.append(Spacer(1, 1))
 
-    # Meta line
     meta_parts = []
+    date = meta.get("date", "")
+    if date:
+        meta_parts.append(date)
     if meta.get("depth"):
         meta_parts.append("Depth: %s" % meta["depth"])
     if meta.get("advocates"):
-        meta_parts.append("Advocates: %s" % meta["advocates"])
-    if meta.get("judges"):
-        meta_parts.append("Judges: %s" % meta["judges"])
-    elif meta.get("cardinals"):
-        meta_parts.append("Judges: %s" % meta["cardinals"])
+        meta_parts.append("%s Advocates" % meta["advocates"])
+    if meta.get("judges") or meta.get("cardinals"):
+        meta_parts.append("%s Judges" % (meta.get("judges") or meta.get("cardinals")))
     if meta.get("cost"):
-        meta_parts.append("Cost: %s" % meta["cost"])
+        meta_parts.append(meta["cost"])
     if meta.get("time"):
-        meta_parts.append("Time: %s" % meta["time"])
-    date = meta.get("date", "")
-    if date:
-        meta_parts.insert(0, date)
+        meta_parts.append(meta["time"])
     if meta_parts:
-        story.append(Paragraph(_escape_xml(" | ".join(meta_parts)), styles['subtitle']))
+        story.append(Paragraph(_escape_xml("  |  ".join(meta_parts)), styles['subtitle']))
 
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 6))
     story.append(ThinRule(CONTENT_W, NAVY, 1))
-    story.append(Spacer(1, 6))
-
-    # --- The Question ---
-    story.append(Paragraph("The Question", styles['h1']))
-    story.append(AccentBar())
-    story.append(Spacer(1, 4))
-
-    if parsed["the_prompt"]:
-        prompt_text = _truncate_text(parsed["the_prompt"], max_chars=500)
-        story.append(CalloutBox(
-            _md_inline_to_xml(prompt_text),
-            CONTENT_W, styles['callout'], LIGHT_GRAY, MED_BLUE,
-        ))
-    story.append(Spacer(1, 6))
-
-    # --- Bottom Line ---
-    story.append(Paragraph("Bottom Line", styles['h1']))
-    story.append(AccentBar(color=ACCENT))
-    story.append(Spacer(1, 4))
-
-    ruling, explanation = _extract_ruling(parsed["recommended_outcome"])
-
-    if ruling:
-        story.append(Paragraph(
-            "<b>Ruling:</b> " + _md_inline_to_xml(ruling),
-            styles['ruling'],
-        ))
-        story.append(Spacer(1, 2))
-
-    if explanation:
-        # Render explanation paragraphs — limit to keep within page 1
-        explanation_flowables = _render_compact_markdown(
-            explanation, styles, max_paragraphs=4,
-        )
-        story.extend(explanation_flowables)
-
-    # --- Dissenting Opinions (compact, on page 1 if present) ---
-    if parsed.get("dissenting_opinions"):
-        story.append(Spacer(1, 4))
-        story.append(Paragraph("Dissent", styles['h2']))
-        story.append(Spacer(1, 2))
-        dissent_text = _truncate_text(parsed["dissenting_opinions"], max_chars=400)
-        story.extend(_render_compact_markdown(dissent_text, styles, max_paragraphs=2))
-
-    # ==================================================================
-    # PAGE 2: How We Got Here + Next Steps
-    # ==================================================================
-
-    # We don't force a page break — ReportLab will flow naturally.
-    # But we add a thin rule to visually separate if it lands on the same page.
     story.append(Spacer(1, 8))
-    story.append(ThinRule(CONTENT_W, RULE_COLOR, 0.5))
-    story.append(Spacer(1, 6))
 
-    # --- Key Moments ---
-    story.append(Paragraph("Key Moments", styles['h1']))
+    # ==================================================================
+    # 1. THE QUESTION
+    # ==================================================================
+    story.append(Paragraph("The Question", styles['section']))
     story.append(AccentBar(color=MED_BLUE))
     story.append(Spacer(1, 4))
 
-    if parsed.get("key_moments"):
-        # Limit to 5 key moments
-        moments = parsed["key_moments"][:5]
-        for moment in moments:
-            story.append(Paragraph(
-                "<bullet>&bull;</bullet> " + _md_inline_to_xml(moment),
-                styles['bullet'],
-            ))
+    if parsed["the_prompt"]:
+        prompt_text = parsed["the_prompt"].strip().replace("\n", " ")
+        if len(prompt_text) > 400:
+            prompt_text = prompt_text[:397] + "..."
+        story.append(Paragraph(
+            "\u201c" + _escape_xml(prompt_text) + "\u201d",
+            styles['question'],
+        ))
+
+    # ==================================================================
+    # 2. RULING
+    # ==================================================================
+    story.append(Paragraph("Ruling", styles['section']))
+    story.append(AccentBar(color=ACCENT))
+    story.append(Spacer(1, 4))
+
+    ruling = _extract_ruling_line(parsed["recommended_outcome"])
+    if ruling:
+        story.append(RulingBox(
+            _md_inline_to_xml(ruling),
+            CONTENT_W, styles['ruling'], LIGHT_GRAY, ACCENT,
+        ))
+        story.append(Spacer(1, 6))
+
+    # ==================================================================
+    # 3. WHY — the analytical reasoning (the meat)
+    # ==================================================================
+    analysis_paras = _extract_analysis_paragraphs(parsed["recommended_outcome"], max_paras=3)
+
+    # Also pull numbered evidence points (the synthesis elements)
+    evidence_points = _extract_key_evidence(parsed["recommended_outcome"])
+
+    if analysis_paras or evidence_points:
+        story.append(Paragraph("Why This Is the Answer", styles['section']))
+        story.append(AccentBar(color=ACCENT2))
         story.append(Spacer(1, 4))
 
-    # --- Scorecard ---
+        # Lead with the analytical prose — the reasoning and mechanisms
+        for para in analysis_paras:
+            story.append(Paragraph(_md_inline_to_xml(para), styles['body']))
+
+        # Then the structured evidence points
+        if evidence_points:
+            story.append(Spacer(1, 2))
+            for i, point in enumerate(evidence_points, 1):
+                story.append(Paragraph(
+                    "<bullet>%d.</bullet> %s" % (i, point),
+                    styles['numbered'],
+                ))
+        story.append(Spacer(1, 2))
+
+    # ==================================================================
+    # 4. KEY RISKS & CAVEATS
+    # ==================================================================
+    risks = _extract_risks_and_caveats(parsed)
+    if risks:
+        story.append(Paragraph("Key Risks", styles['section']))
+        story.append(AccentBar(color=ACCENT))
+        story.append(Spacer(1, 4))
+
+        for risk in risks:
+            if len(risk) > 220:
+                last_period = risk[:220].rfind(". ")
+                if last_period > 110:
+                    risk = risk[:last_period + 1]
+                else:
+                    risk = risk[:217] + "..."
+            story.append(Paragraph(
+                "<bullet>\u2022</bullet> " + _md_inline_to_xml(risk),
+                styles['bullet'],
+            ))
+        story.append(Spacer(1, 2))
+
+    # ==================================================================
+    # 5. NEXT STEPS
+    # ==================================================================
+    if parsed.get("next_steps"):
+        story.append(Paragraph("Next Steps", styles['section']))
+        story.append(AccentBar(color=MED_BLUE))
+        story.append(Spacer(1, 4))
+
+        next_items = _extract_numbered_points(parsed["next_steps"], max_points=5)
+        if next_items:
+            for i, item in enumerate(next_items, 1):
+                if len(item) > 200:
+                    item = item[:197] + "..."
+                story.append(Paragraph(
+                    "<bullet>%d.</bullet> %s" % (i, _md_inline_to_xml(item)),
+                    styles['numbered'],
+                ))
+        else:
+            paras = parsed["next_steps"].strip().split("\n\n")[:3]
+            for p in paras:
+                p = p.strip().replace("\n", " ")
+                if len(p) > 250:
+                    p = p[:247] + "..."
+                story.append(Paragraph(_md_inline_to_xml(p), styles['body']))
+
+    # ==================================================================
+    # 6. BUILD THIS (pointer only)
+    # ==================================================================
+    if parsed.get("build_this"):
+        story.append(Spacer(1, 4))
+        story.append(Paragraph("Build This", styles['subsection']))
+        story.append(Paragraph(
+            "<i>An implementation-ready prompt is included in the full session summary. "
+            "See the full PDF for the complete spec.</i>",
+            styles['meta'],
+        ))
+
+    # ==================================================================
+    # 7. PANEL SCORECARD — compact
+    # ==================================================================
     perf = parsed.get("council_performance")
     if perf:
-        story.append(Paragraph("Scorecard", styles['h2']))
+        story.append(Spacer(1, 4))
+        story.append(Paragraph("Panel Scorecard", styles['subsection']))
         story.append(Spacer(1, 3))
 
         if isinstance(perf, list) and perf and isinstance(perf[0], dict):
-            # Convert advocate cards to a compact table
-            headers = ["Model", "Opening", "Final", "Rank"]
+            headers = ["#", "Model", "Final Position"]
             rows = []
             for adv in perf:
-                rank_str = adv.get("rank", "")
-                if rank_str and rank_str != "-":
-                    rank_display = "#%s" % rank_str
-                elif rank_str == "-":
-                    rank_display = "W/D"
-                else:
-                    rank_display = ""
-                opening = _truncate_text(adv.get("opening", ""), 80)
-                final = _truncate_text(adv.get("final", ""), 80)
-                rows.append([adv.get("model", ""), opening, final, rank_display])
+                rank = adv.get("rank", "")
+                rank_display = rank if rank and rank != "-" else "\u2014"
+                final = adv.get("final", adv.get("opening", ""))
+                if len(final) > 100:
+                    last_period = final[:100].rfind(". ")
+                    if last_period > 50:
+                        final = final[:last_period + 1]
+                    else:
+                        final = final[:97] + "..."
+                rows.append([rank_display, adv.get("model", ""), final])
 
-            col_widths = [
-                CONTENT_W * 0.18,
-                CONTENT_W * 0.33,
-                CONTENT_W * 0.33,
-                CONTENT_W * 0.10,
-            ]
-            # Adjust if widths don't sum properly
-            remainder = CONTENT_W - sum(col_widths)
-            col_widths[-1] += remainder
-
+            col_widths = [CONTENT_W * 0.06, CONTENT_W * 0.22, CONTENT_W * 0.72]
             table = _make_compact_table(headers, rows, col_widths, styles)
             story.append(table)
-            story.append(Spacer(1, 4))
 
         elif isinstance(perf, tuple):
             headers, rows = perf
@@ -544,58 +730,19 @@ def _build_brief_story(parsed, styles):
                 col_widths = [CONTENT_W / n_cols] * n_cols
                 table = _make_compact_table(headers, rows, col_widths, styles)
                 story.append(table)
-                story.append(Spacer(1, 4))
 
-    # --- Convergence ---
-    if parsed.get("convergence_assessment"):
-        story.append(Paragraph("Convergence", styles['h2']))
-        story.append(Spacer(1, 2))
-        conv_text = _truncate_text(parsed["convergence_assessment"], max_chars=400)
-        story.append(Paragraph(
-            _md_inline_to_xml(conv_text.replace("\n", " ")),
-            styles['body_small'],
-        ))
-        story.append(Spacer(1, 4))
-
-    # --- Next Steps ---
-    if parsed.get("next_steps"):
-        story.append(Paragraph("Next Steps", styles['h1']))
-        story.append(AccentBar(color=ACCENT2))
-        story.append(Spacer(1, 3))
-        next_steps_flowables = _render_compact_markdown(
-            parsed["next_steps"], styles, max_paragraphs=6,
-        )
-        story.extend(next_steps_flowables)
-
-    # --- Build This (compact pointer, not the full spec) ---
-    if parsed.get("build_this"):
-        story.append(Spacer(1, 4))
-        story.append(Paragraph("Build This", styles['h2']))
-        story.append(Spacer(1, 2))
-        # Just the first paragraph or blockquote — point to full summary for details
-        build_text = parsed["build_this"].strip()
-        # Extract blockquote intro if present
-        bq_lines = []
-        for line in build_text.split("\n"):
-            stripped = line.strip()
-            if stripped.startswith(">"):
-                bq_lines.append(stripped.lstrip("> ").strip())
-            elif bq_lines:
-                break
-        if bq_lines:
-            story.append(Paragraph(
-                _md_inline_to_xml(" ".join(bq_lines)),
-                styles['body_small'],
-            ))
-        else:
-            story.append(Paragraph(
-                _md_inline_to_xml(_truncate_text(build_text, 300)),
-                styles['body_small'],
-            ))
-        story.append(Paragraph(
-            "<i>See full session summary for complete implementation spec.</i>",
-            styles['meta'],
-        ))
+    # ==================================================================
+    # FOOTER
+    # ==================================================================
+    story.append(Spacer(1, 10))
+    story.append(ThinRule(CONTENT_W, RULE_COLOR, 0.4))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "<i>This executive brief is auto-generated from the full Tribunal session summary. "
+        "For complete deliberation records, judicial opinions, and debate transcripts, "
+        "see the full session directory.</i>",
+        styles['footer_note'],
+    ))
 
     return story
 
@@ -605,7 +752,7 @@ def _build_brief_story(parsed, styles):
 # ---------------------------------------------------------------------------
 
 def generate_exec_brief(md_path, output_path=None):
-    """Generate a 2-page executive brief PDF from a session-summary.md file.
+    """Generate a 1-2 page executive brief PDF from a session-summary.md file.
 
     Args:
         md_path: Path to session-summary.md.
@@ -620,7 +767,6 @@ def generate_exec_brief(md_path, output_path=None):
     parsed = parse_session_summary(md_text)
 
     if output_path is None:
-        # Derive name from the summary file: replace "session-summary" with "exec-brief"
         md_name = Path(md_path).stem
         brief_name = md_name.replace("session-summary", "exec-brief")
         if brief_name == md_name:
