@@ -1,7 +1,7 @@
 ---
 name: tribunal
 version: "0.5.0"
-description: "Multi-model AI deliberation with anti-sycophancy controls. Convenes a tribunal of AI models to independently solve a task, debate with evidence (position stability tracking, advisor framing, affective/epistemic convergence analysis per Kelley & Riedl 2026), and produce a consensus output validated by impartial judges on The Bench and a Fresh Eyes reviewer. Supports QUICK through NUCLEAR depth tiers. Trigger: /tribunal or 'council'."
+description: "Multi-model AI deliberation with anti-sycophancy controls. Convenes a tribunal of AI models to independently solve a task, debate with evidence (position stability tracking, advisor framing, affective/epistemic convergence analysis per Kelley & Riedl 2026), and produce a consensus output validated by impartial judges on The Bench and a Fresh Eyes reviewer. Supports T1 (Spot Check) through T6 (Red Team) depth tiers. Trigger: /tribunal or 'council'."
 argument-hint: 'tribunal Write a best-in-class system prompt for customer support, tribunal Review this architecture for security issues'
 allowed-tools: Bash, Read, Write
 homepage: https://github.com/mdm-sfo/tribunal
@@ -46,7 +46,7 @@ Activate when the user says any of:
 Before doing anything, parse the user's input for:
 
 1. **TASK**: What they want the council to work on
-2. **DEPTH** (if specified): QUICK | BALANCED | THOROUGH | RIGOROUS | EXHAUSTIVE | NUCLEAR
+2. **DEPTH** (if specified): T1 | T2 | T3 | T4 | T5 | T6
 3. **TASK_TYPE**: What kind of work this is:
    - **CODE** — "write", "build", "implement", "fix" → Models produce code
    - **ARCHITECTURE** — "design", "architect", "plan" → Models produce designs
@@ -58,18 +58,12 @@ Before doing anything, parse the user's input for:
 4. **CONTEXT**: Any files, code, or additional context the user provides
 
 **Auto-select depth if not specified:**
-- Simple question → QUICK (2 advocates, no judges)
-- Standard task → BALANCED (2-3 advocates, 1 judge)
-- "Best-in-class", "production-ready", important deliverable → THOROUGH (3-4 advocates, 2-3 judges)
-- "Security review", "architecture decision", high-stakes → RIGOROUS (3-4 advocates, 3-4 judges)
-- "Mission-critical", explicitly exhaustive → EXHAUSTIVE (4-5 advocates, 4-5 judges, stability audit, Fresh Eyes)
-- "Nuclear", "maximum rigor", adversarial-grade → NUCLEAR (5 advocates, 6 judges, 7 debate rounds, mid-debate checkpoint, stability audit, Fresh Eyes)
-
-**IMPORTANT — Depth keyword disambiguation:** The word "nuclear" may appear in the
-user's question as subject matter (e.g., nuclear power, nuclear energy) rather than
-as a depth instruction. Only treat it as a depth selection if it clearly refers to
-the tribunal's depth tier (e.g., "use nuclear depth", "run this at nuclear",
-"/tribunal NUCLEAR"). When ambiguous, ask the user.
+- Simple question → T1 (2 advocates, no judges)
+- Standard task → T2 (2-3 advocates, 1 judge)
+- "Best-in-class", "production-ready", important deliverable → T3 (3-4 advocates, 2-3 judges)
+- "Security review", "architecture decision", high-stakes → T4 (3-4 advocates, 3-4 judges)
+- "Mission-critical", "stress test this" → T5 (4-5 advocates, 4-5 judges, stability audit, Fresh Eyes)
+- "Maximum rigor", "red team this", adversarial-grade → T6 (5 advocates, 6 judges, 7 debate rounds, mid-debate checkpoint, stability audit, Fresh Eyes)
 
 **MANDATORY — Confirm depth with user before running:**
 
@@ -84,13 +78,13 @@ can always type a different depth in the "Other" field):
 Question: "What depth should this tribunal run at?"
 Options:
   - "{RECOMMENDED_DEPTH} (Recommended)" — include cost/time estimate
-  - "THOROUGH — 3-4 advocates, 3 judges, 3 rounds (~$3, 8-15 min)"
-  - "NUCLEAR — 5 advocates, 6 judges, 7 rounds + checkpoint (~$15, 45-75 min)"
-  - "QUICK — 2 advocates, no judges, no debate (~$0.10, 1-2 min)"
+  - "T3: Deep Review — 3-4 advocates, 3 judges, 3 rounds (~$3, 8-15 min)"
+  - "T6: Red Team — 5 advocates, 6 judges, 7 rounds + checkpoint (~$15, 45-75 min)"
+  - "T1: Spot Check — 2 advocates, no judges, no debate (~$0.10, 1-2 min)"
 ```
 
-NUCLEAR must ALWAYS appear as an option — never omit it. If your recommended
-depth is THOROUGH, replace the duplicate with RIGOROUS or EXHAUSTIVE.
+T6 must ALWAYS appear as an option — never omit it. If your recommended
+depth is T3, replace the duplicate with T4 or T5.
 
 Also ask about audio generation:
 
@@ -101,9 +95,8 @@ Options:
   - "No — text output only"
 ```
 
-Only proceed after the user confirms both. This prevents depth/content confusion
-(e.g., "use nuclear" meaning nuclear power vs. NUCLEAR depth tier) and avoids
-unexpected TTS costs.
+Only proceed after the user confirms both. This prevents depth confusion
+and avoids unexpected TTS costs.
 
 **After confirmation, display your parsing:**
 
@@ -140,6 +133,48 @@ Your submission follows the Hypothesis + Evidence format:
 - **Self-Assessment**: Score your own work honestly
 
 **Save this to file before proceeding. This is the anti-anchoring measure — your work is sealed.**
+
+---
+
+## Step 1.5: Write the Briefing File (VERBATIM PROMPT RULE)
+
+**CRITICAL: The briefing file you pass to the orchestrator must preserve the user's original prompt VERBATIM.** The orchestrator passes the briefing through raw — if you rewrite the user's question, your assumptions cascade through the entire deliberation (advocates anchor on them, challengers weaponize them, and the final output reflects YOUR interpretation, not the user's actual question).
+
+**Mandatory briefing format:**
+
+```markdown
+# Tribunal Briefing
+
+## Task
+[User's original prompt — VERBATIM. Fix only obvious typos/grammar.
+Do NOT add requirements, assumptions, constraints, or output format
+instructions that the user did not explicitly state.
+Do NOT rewrite, paraphrase, or "improve" the question.
+Do NOT add phrases like "beginner-friendly", "working adult",
+"Consider practical constraints" unless the user said those exact words.]
+
+## Task Type
+[CODE | ARCHITECTURE | REVIEW | RESEARCH | PROMPT | GENERAL]
+
+## Context (optional)
+[Only if the user provided files, code, or additional context.
+Include file contents or references here. This is for raw material
+the user gave you — NOT your interpretation of what they need.]
+```
+
+**What you MUST NOT include in the briefing:**
+- A `## Requirements` section with invented bullet points
+- A `## Output Format` section specifying sub-headings the user didn't ask for
+- Any assumptions about the user's skill level, constraints, or preferences they didn't state
+- Reworded versions of the user's question
+
+**What you CAN do:**
+- Fix obvious spelling/grammar errors in the user's prompt
+- Add a `## Context` section with file contents or code the user provided
+- Tag the task type
+- Write whatever framing you want in your own sealed submission (Step 1) — that's your independent position, not the shared briefing
+
+The briefing is a neutral document. Your opinions go in your sealed submission.
 
 ---
 
@@ -187,7 +222,7 @@ The orchestrator handles everything:
 **Watch stderr for progress:**
 
 ```
-[tribunal] Session tribunal-rust-or-go-20260228-203200 started (THOROUGH depth)
+[tribunal] Session tribunal-rust-or-go-20260228-203200 started (T3 depth)
 [tribunal] The Bench: Justice Qwen-3.5-397B, Justice DeepSeek-R1, Appellate Judge MiniMax-M2.5
 [tribunal] Phase 2: Independent work — dispatching to 4 advocates...
 [tribunal]   ✓ Claude Sonnet submitted (3.2s)
@@ -207,9 +242,9 @@ The orchestrator handles everything:
 [tribunal] Phase 8: Done. Files written to ~/wormhole/tribunal-sessions/tribunal-rust-or-go-20260228-203200/
 ```
 
-At NUCLEAR depth, you'll also see:
+At T6 (Red Team) depth, you'll also see:
 ```
-[tribunal] NUCLEAR mode: debate rounds 1-4, then judicial checkpoint, then rounds 5-7
+[tribunal] T6 Red Team mode: debate rounds 1-4, then judicial checkpoint, then rounds 5-7
 [tribunal] Phase 5: Debate round 4 of 7 — mid-debate judicial checkpoint...
 [tribunal]   Judges reviewing debate progress + stability data...
 [tribunal] Phase 5: Debate round 5 of 7 (post-checkpoint)...
@@ -224,54 +259,50 @@ Read the output files and present to the user:
 ### Output Files
 
 The orchestrator writes to `~/wormhole/tribunal-sessions/<session-id>/` (e.g., `tribunal-rust-or-go-20260302-223614/`):
-- `final-output.md` — The deliverable (what the user asked for)
-- `session-summary.md` — Canonical 4-section summary: Question → Recommended Outcome → How We Got Here → Build This (BALANCED+ only). **All summaries must define unknown, specialized, or domain-specific terms on first use** (e.g., "keystone/template theory", "gas brownfield") **and spell out all acronyms/initialisms on first use** (e.g., "NLI (Natural Language Inference)", "DGX (NVIDIA DGX)"). Assume the reader has no prior context.
+- `final-output.md` — The clean deliverable (the actual answer, stripped of tribunal framing)
+- `session-summary.md` — Executive summary: Question → Bottom Line → How We Got Here (Scorecard + Key Moments) → Next Steps (T2+ only). **All summaries must define unknown, specialized, or domain-specific terms on first use** and spell out all acronyms on first use. Assume zero prior context.
 - `session-summary.pdf` — Styled PDF version of the session summary (requires `reportlab`)
-- `debrief.md` — Situation report: how the council worked, where they agreed/disagreed
-- `council-log.md` — Full deliberation record (all submissions, critiques, debates, verdicts)
+- `debrief.md` — Process audit: panel composition, session statistics, identity reveals
+- `council-record.md` — Full deliberation record (all judicial opinions, majority opinion, submissions, dissents)
 - `play-by-play.md` — Narrative "sporting event" commentary of the session
-- `position-stability.md` — Position stability scorecard (EXHAUSTIVE+ only)
+- `position-stability.md` — Position stability scorecard (T5+ only)
 
 ### Presentation Format
 
 ```
 ## Tribunal Result
 
-[Present the final output — this is the deliverable the user asked for]
+[Present the final-output.md — the clean deliverable, stripped of tribunal framing.
+This is the actual answer to the user's question.]
 
 ---
 
 ## Session Summary
 
-[Present the session-summary.md — the canonical Question → Outcome → How We Got Here → Build This document. This is the reader-friendly executive summary of the entire deliberation.
+[Present the session-summary.md — the executive summary:
+Bottom Line → How We Got Here (Scorecard + Key Moments) → Next Steps.
 
-IMPORTANT: All summaries must define unknown, specialized, or domain-specific terms inline on first use. If a model introduces a concept like "keystone/template theory" or "gas brownfield", it must be briefly defined in parentheses or a subordinate clause. All acronyms and initialisms must be spelled out on first use (e.g., "NLI (Natural Language Inference)"). Assume the reader has zero prior context with the subject matter.]
+Define all domain terms and acronyms on first use. Assume zero prior context.]
 
 ---
 
-## Debrief Summary
+## Debrief
 
-[Key points from the debrief: consensus type, positions changed, judicial verdicts,
-any remands issued, Fresh Eyes findings]
+[Key points from debrief.md: panel composition, session statistics, identity reveals]
 
 ### Panel Composition
-| Role | Model | Final Assessment |
-|------|-------|-----------------| 
-| Advocate | [Model] | [Summary] |
-| ...  | ...   | ... |
-| Justice | [Model] | [Verdict summary] |
-| Appellate Judge | [Model] | [Verdict summary] |
-| Fresh Eyes | [Model] | [Assessment] |
-
-### Key Disagreements
-[Any contested points with both majority and minority positions]
+| Role | Model | Status |
+|------|-------|--------|
+| Advocate | [Model] | [OK / Failed] |
+| Justice | [Model] | [OK / Failed] |
+| Fresh Eyes | [Model] | [OK / Failed] |
 
 ---
-📊 Session: {session-id} | Depth: {DEPTH} | Advocates: {N} | Judges: {N}
-⏱️ Duration: {time} | API Calls: {N} | Cost: ~${cost}
-📁 Full logs: ~/wormhole/tribunal-sessions/{session-id}/
+Session: {session-id} | Depth: {DEPTH} | Advocates: {N} | Judges: {N}
+Duration: {time} | Cost: ~${cost}
+Full logs: ~/wormhole/tribunal-sessions/{session-id}/
 
-### Position Stability (EXHAUSTIVE+ only)
+### Position Stability (T5+ only)
 [Summary from position-stability.md — flag any drift concerns]
 ---
 
@@ -288,19 +319,19 @@ Want me to go deeper on any point, or run another tribunal session?
 
 3. **Always present minority positions alongside consensus.** If a model disagreed and wasn't convinced, their position appears in the output. Minority dissent is protected, not suppressed.
 
-4. **Never skip judicial review** (at BALANCED+ depth). The whole point of The Tribunal is that impartial judges evaluate the work. Skipping judges turns this into a chat room.
+4. **Never skip judicial review** (at T2+ depth). The whole point of The Tribunal is that impartial judges evaluate the work. Skipping judges turns this into a chat room.
 
-5. **Never skip Fresh Eyes validation** (at EXHAUSTIVE+ depth). The zero-context review catches groupthink artifacts that the debating models normalized. Fresh Eyes runs for EXHAUSTIVE and NUCLEAR tiers.
+5. **Never skip Fresh Eyes validation** (at T5+ depth). The zero-context review catches groupthink artifacts that the debating models normalized. Fresh Eyes runs for T5 and T6 tiers.
 
-6. **Justices are always seated.** Qwen 3.5 397B and DeepSeek R1 serve on every THOROUGH+ session. They are not randomly drawn — they earned their permanent seats.
+6. **Justices are always seated.** Qwen 3.5 397B and DeepSeek R1 serve on every T3+ session. They are not randomly drawn — they earned their permanent seats.
 
 7. **Present both the final output AND the debrief.** The user gets the deliverable they asked for PLUS the audit trail of how it was produced.
 
 8. **Maximum 1 remand per session.** If judges remand, advocates revise once. If judges still have concerns after the revision, they note the deficiency in their verdict and the session proceeds. No infinite loops.
 
-9. **Position stability is tracked at EXHAUSTIVE+ depth.** Every debate response includes a 1-5 stability score. The orchestrator compiles these into a scorecard that judges use to detect sycophantic drift. Based on Kelley & Riedl (2026) research on multi-turn sycophantic convergence.
+9. **Position stability is tracked at T5+ depth.** Every debate response includes a 1-5 stability score. The orchestrator compiles these into a scorecard that judges use to detect sycophantic drift. Based on Kelley & Riedl (2026) research on multi-turn sycophantic convergence.
 
-10. **NUCLEAR mid-debate checkpoint is mandatory.** At NUCLEAR depth, debate pauses after round 4 for a full judicial review of progress + stability data. This checkpoint cannot be skipped — it catches sycophantic drift before the highest-risk rounds (5-7).
+10. **T6 mid-debate checkpoint is mandatory.** At T6 (Red Team) depth, debate pauses after round 4 for a full judicial review of progress + stability data. This checkpoint cannot be skipped — it catches sycophantic drift before the highest-risk rounds (5-7).
 
 ---
 
@@ -324,7 +355,7 @@ export FIREWORKS_API_KEY="..."     # Alternative for specific models
 export ELEVENLABS_API_KEY="..."     # ElevenLabs TTS for screenplay audio
 
 # Optional: Configuration
-export TRIBUNAL_DEFAULT_DEPTH="THOROUGH"
+export TRIBUNAL_DEFAULT_DEPTH="T3"
 export TRIBUNAL_TIMEOUT="120"           # Per-model timeout in seconds
 export TRIBUNAL_OUTPUT_DIR="~/wormhole/tribunal-sessions"
 export TRIBUNAL_MAX_COST="5.00"         # Abort if estimated cost exceeds this
@@ -336,22 +367,22 @@ At minimum, `TOGETHER_API_KEY` is required — it provides access to all judge m
 
 | Rank | Role | Models | Assignment |
 |------|------|--------|------------|
-| **Justices** | Permanent senior judges | Qwen 3.5 397B, DeepSeek R1 | Always seated at THOROUGH+ |
-| **Appellate Judges** | Primary rotation pool | MiniMax M2.5, Kimi K2, GLM-4.7 | Randomly drawn at BALANCED+ |
-| **Magistrate Judges** | Extended bench | GPT-OSS 120B, GLM-5, DeepCogito Cogito v2.1 | Drawn at RIGOROUS+ |
+| **Justices** | Permanent senior judges | Qwen 3.5 397B, DeepSeek R1 | Always seated at T3+ |
+| **Appellate Judges** | Primary rotation pool | MiniMax M2.5, Kimi K2, GLM-4.7 | Randomly drawn at T2+ |
+| **Magistrate Judges** | Extended bench | GPT-OSS 120B, GLM-5, DeepCogito Cogito v2.1 | Drawn at T4+ |
 
 ### Depth Levels
 
-| Depth | Advocates | Judges | Debate Rounds | Checkpoint | Stability Audit | Fresh Eyes | Est. Time | Est. Cost |
-|-------|-----------|-----------|--------------|-----------|-----------|-----------|-----------|-----------| 
-| QUICK | 2 | 0 | 0 | — | No | No | 1-2 min | ~$0.10 |
-| BALANCED | 2-3 | 1 | 1 | — | No | No | 3-5 min | ~$0.50 |
-| THOROUGH | 3-4 | 2-3 | 3 | — | No | No | 8-15 min | ~$2.00 |
-| RIGOROUS | 3-4 | 3-4 | 5 | — | No | No | 15-25 min | ~$5.00 |
-| EXHAUSTIVE | 4-5 | 4-5 | 5 | — | Yes | Yes | 25-45 min | ~$10.00 |
-| NUCLEAR | 5 | 6 | 7 | After R4 | Yes | Yes | 45-75 min | ~$15.00 |
+| Depth | Subtitle | Advocates | Judges | Debate Rounds | Checkpoint | Stability Audit | Fresh Eyes | Est. Time | Est. Cost |
+|-------|----------|-----------|--------|---------------|------------|-----------------|------------|-----------|-----------|
+| T1 | Spot Check | 2 | 0 | 0 | — | No | No | 1-2 min | ~$0.10 |
+| T2 | Standard Review | 2-3 | 1 | 1 | — | No | No | 3-5 min | ~$0.50 |
+| T3 | Deep Review | 3-4 | 2-3 | 3 | — | No | No | 8-15 min | ~$2.00 |
+| T4 | Full Panel | 3-4 | 3-4 | 5 | — | No | No | 15-25 min | ~$5.00 |
+| T5 | Stress Test | 4-5 | 4-5 | 5 | — | Yes | Yes | 25-45 min | ~$10.00 |
+| T6 | Red Team | 5 | 6 | 7 | After R4 | Yes | Yes | 45-75 min | ~$15.00 |
 
-**NUCLEAR depth** splits debate into two halves with a judicial checkpoint after round 4. Judges review position stability data and assess whether convergence is genuine or sycophantic before rounds 5-7 proceed. This is based on Kelley & Riedl (2026) findings that sycophantic drift accelerates steeply after round 4-5.
+**T6 (Red Team) depth** splits debate into two halves with a judicial checkpoint after round 4. Judges review position stability data and assess whether convergence is genuine or sycophantic before rounds 5-7 proceed. This is based on Kelley & Riedl (2026) findings that sycophantic drift accelerates steeply after round 4-5.
 
 ---
 

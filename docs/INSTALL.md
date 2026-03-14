@@ -17,7 +17,7 @@ Then run a test:
 
 ```bash
 echo "What is the best programming language for CLI tools?" > /tmp/test-briefing.md
-python3 scripts/council_orchestrator.py --briefing /tmp/test-briefing.md --depth QUICK --emit summary
+python3 scripts/council_orchestrator.py --briefing /tmp/test-briefing.md --depth T1 --emit summary
 ```
 
 If that works, you're good. Read on for platform-specific details and optional features.
@@ -207,7 +207,7 @@ export FIREWORKS_API_KEY="your-key-here"       # Backup model routing
 ```bash
 export ELEVENLABS_API_KEY="your-key-here"      # TTS audio generation
 export TRIBUNAL_OUTPUT_DIR="~/tribunal-output"  # Where sessions are saved (default: ./conclave-sessions)
-export CONCLAVE_DEFAULT_DEPTH="THOROUGH"        # Default depth level
+export CONCLAVE_DEFAULT_DEPTH="T3"               # Default depth level (old names also accepted)
 export CONCLAVE_MAX_COST="5.00"                 # Safety limit per session in USD
 export TRIBUNAL_NLI_URL="http://gpu-host:8787"  # NLI validation server endpoint
 ```
@@ -246,11 +246,11 @@ for k in keys:
 "
 ```
 
-### 3. Run a QUICK test
+### 3. Run a T1 (Spot Check) test
 
 ```bash
 echo "Is water wet?" > /tmp/test.md
-python3 scripts/council_orchestrator.py --briefing /tmp/test.md --depth QUICK --emit summary
+python3 scripts/council_orchestrator.py --briefing /tmp/test.md --depth T1 --emit summary
 ```
 
 This should complete in under 2 minutes and cost ~$0.10. If it works, your setup is good.
@@ -370,5 +370,5 @@ Some models (especially GPT-5) can take 3+ minutes for long briefings. The orche
 ### Cost safety limit hit
 If you see "Estimated cost exceeds limit", increase `CONCLAVE_MAX_COST`:
 ```bash
-export CONCLAVE_MAX_COST=25.00   # For NUCLEAR depth sessions
+export CONCLAVE_MAX_COST=25.00   # For T6 (Red Team) depth sessions
 ```

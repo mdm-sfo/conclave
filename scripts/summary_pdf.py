@@ -460,7 +460,7 @@ def _parse_header_meta(header_block):
 
     Expected format:
         # Conclave Session Summary
-        **Session: ABC123 | Depth: THOROUGH | Advocates: 5 | Judges: 3 | Cost: $1.2345 | Time: 4m 30s**
+        **Session: ABC123 | Depth: T3 | Advocates: 5 | Judges: 3 | Cost: $1.2345 | Time: 4m 30s**
         *Full logs: ... | Audit trail: ... | Narrative: ...*
     """
     meta = {}  # type: dict
@@ -478,6 +478,8 @@ def _parse_header_meta(header_block):
                     meta[key.strip().lower()] = val.strip()
         elif line.startswith("*") and "Full logs:" in line:
             meta["logs_line"] = line.strip("*").strip()
+        elif line.startswith("*Note:") or line.startswith("*note:"):
+            meta["anonymization_note"] = line.strip("*").strip()
     return meta
 
 
@@ -504,6 +506,60 @@ def _parse_table(lines):
         else:
             rows.append(cells)
     return headers, rows
+
+
+def _parse_council_subsections(text):
+    # type: (str) -> list
+    """Parse council performance subsections into list of dicts.
+
+    Expects markdown like:
+        #### GPT-5 — Rank #1
+        **Opening Position:** ...
+        **Final Position:** ...
+        **Key Catalyst:** ...
+
+    Returns list of dicts with keys: model, rank, opening, final, catalyst.
+    Returns empty list if no #### headings found (e.g., old table format).
+    """
+    advocates = []  # type: list
+    current = None  # type: Optional[dict]
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+
+        # Detect #### heading like "#### GPT-5 — Rank #1"
+        if stripped.startswith("#### "):
+            if current:
+                advocates.append(current)
+            heading = stripped[5:].strip()
+            # Parse "Model Name — Rank #N" or "Model Name - Rank #N"
+            parts = re.split(r'\s*[—–-]\s*Rank\s*', heading, maxsplit=1)
+            model = parts[0].strip() if parts else heading
+            rank = ""
+            if len(parts) > 1:
+                rank_match = re.search(r'#?(\d+)', parts[1])
+                if rank_match:
+                    rank = rank_match.group(1)
+                elif "-" in parts[1]:
+                    rank = "-"
+            current = {"model": model, "rank": rank, "opening": "", "final": "", "catalyst": ""}
+            continue
+
+        if current is None:
+            continue
+
+        # Parse bold-prefixed fields
+        if stripped.startswith("**Opening Position:**"):
+            current["opening"] = stripped.replace("**Opening Position:**", "").strip()
+        elif stripped.startswith("**Final Position:**"):
+            current["final"] = stripped.replace("**Final Position:**", "").strip()
+        elif stripped.startswith("**Key Catalyst:**"):
+            current["catalyst"] = stripped.replace("**Key Catalyst:**", "").strip()
+
+    if current:
+        advocates.append(current)
+
+    return advocates
 
 
 def _strip_yaml_frontmatter(md_text):
@@ -543,23 +599,38 @@ def parse_session_summary(md_text):
     Handles optional YAML frontmatter (skipped during parsing, metadata
     merged into header_meta).
 
+    Backward-compatible: accepts both old names (Recommended Outcome,
+    Council Performance) and new names (Bottom Line, Scorecard).
+
     Returns a dict with keys:
         header_meta: dict of session metadata
-        the_question: str
-        recommended_outcome: str
-        council_performance: (headers, rows)
+        the_prompt: str
+        recommended_outcome: str (also accepts "Bottom Line")
+        majority_opinion: str or None
+        council_performance: list[dict] or (headers, rows) (also accepts "Scorecard")
+        convergence_assessment: str or None
         key_moments: list[str]
+        next_steps: str or None
         dissenting_opinions: str or None
         build_this: str or None
+        how_tribunal_works: str or None
+        glossary: str or None
+        inline_appendices: list of (title, content) tuples
     """
     result = {
         "header_meta": {},
-        "the_question": "",
-        "recommended_outcome": "",
-        "council_performance": ([], []),
+        "the_prompt": "",
+        "recommended_outcome": "",  # also accepts "Bottom Line"
+        "majority_opinion": None,
+        "council_performance": ([], []),  # also accepts "Scorecard"
+        "convergence_assessment": None,
         "key_moments": [],
+        "next_steps": None,  # new: accepts "Next Steps"
         "dissenting_opinions": None,
         "build_this": None,
+        "how_tribunal_works": None,
+        "glossary": None,
+        "inline_appendices": [],
     }
 
     # Strip YAML frontmatter if present
@@ -576,25 +647,42 @@ def parse_session_summary(md_text):
         buffer.clear()
         return text
 
+    def _is_heading(stripped_line, *labels):
+        # type: (str, *str) -> bool
+        """Match a heading with or without ## / ### prefix.
+
+        Handles LLMs that occasionally drop markdown heading markers.
+        Matches: "## Bottom Line", "### Scorecard", or bare "Bottom Line".
+        Only matches bare text if it's on its own line (already stripped).
+        """
+        for label in labels:
+            # With markdown prefix
+            if stripped_line.startswith("## " + label) or stripped_line.startswith("### " + label):
+                return True
+            # Bare heading (exact match, case-insensitive)
+            if stripped_line.lower() == label.lower():
+                return True
+        return False
+
     i = 0
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
 
         # Detect section headers
-        if stripped.startswith("## The Question"):
+        if _is_heading(stripped, "The Question", "The Prompt"):
             if current_section == "header":
                 result["header_meta"] = _parse_header_meta(flush_buffer())
             else:
                 flush_buffer()
-            current_section = "the_question"
+            current_section = "the_prompt"
             current_subsection = None
             i += 1
             continue
 
-        if stripped.startswith("## Recommended Outcome"):
-            if current_section == "the_question":
-                result["the_question"] = flush_buffer()
+        if _is_heading(stripped, "Recommended Outcome", "Bottom Line"):
+            if current_section == "the_prompt":
+                result["the_prompt"] = flush_buffer()
             else:
                 flush_buffer()
             current_section = "recommended_outcome"
@@ -602,8 +690,20 @@ def parse_session_summary(md_text):
             i += 1
             continue
 
-        if stripped.startswith("## How We Got Here"):
+        if _is_heading(stripped, "Opinion of the Court", "Majority Opinion"):
             if current_section == "recommended_outcome":
+                result["recommended_outcome"] = flush_buffer()
+            else:
+                flush_buffer()
+            current_section = "majority_opinion"
+            current_subsection = None
+            i += 1
+            continue
+
+        if _is_heading(stripped, "How We Got Here"):
+            if current_section == "majority_opinion":
+                result["majority_opinion"] = flush_buffer()
+            elif current_section == "recommended_outcome":
                 result["recommended_outcome"] = flush_buffer()
             else:
                 flush_buffer()
@@ -612,17 +712,42 @@ def parse_session_summary(md_text):
             i += 1
             continue
 
-        if stripped.startswith("### Council Performance"):
-            flush_buffer()
+        if _is_heading(stripped, "Council Performance", "Scorecard"):
+            if current_subsection == "key_moments":
+                moments_text = flush_buffer()
+                result["key_moments"] = _parse_bullets(moments_text)
+            else:
+                flush_buffer()
             current_section = "how_we_got_here"
             current_subsection = "council_performance"
             i += 1
             continue
 
-        if stripped.startswith("### Key Moments"):
+        if _is_heading(stripped, "Convergence Assessment"):
             if current_subsection == "council_performance":
-                table_text = flush_buffer()
-                result["council_performance"] = _parse_table(table_text.split("\n"))
+                perf_text = flush_buffer()
+                advocates = _parse_council_subsections(perf_text)
+                if advocates:
+                    result["council_performance"] = advocates
+                else:
+                    result["council_performance"] = _parse_table(perf_text.split("\n"))
+            else:
+                flush_buffer()
+            current_section = "how_we_got_here"
+            current_subsection = "convergence_assessment"
+            i += 1
+            continue
+
+        if _is_heading(stripped, "Key Moments"):
+            if current_subsection == "convergence_assessment":
+                result["convergence_assessment"] = flush_buffer()
+            elif current_subsection == "council_performance":
+                perf_text = flush_buffer()
+                advocates = _parse_council_subsections(perf_text)
+                if advocates:
+                    result["council_performance"] = advocates
+                else:
+                    result["council_performance"] = _parse_table(perf_text.split("\n"))
             else:
                 flush_buffer()
             current_section = "how_we_got_here"
@@ -630,8 +755,31 @@ def parse_session_summary(md_text):
             i += 1
             continue
 
-        if stripped.startswith("## Dissenting Opinions"):
+        if _is_heading(stripped, "Next Steps"):
+            # Flush whatever subsection came before
             if current_subsection == "key_moments":
+                moments_text = flush_buffer()
+                result["key_moments"] = _parse_bullets(moments_text)
+            elif current_subsection == "convergence_assessment":
+                result["convergence_assessment"] = flush_buffer()
+            elif current_subsection == "council_performance":
+                perf_text = flush_buffer()
+                advocates = _parse_council_subsections(perf_text)
+                if advocates:
+                    result["council_performance"] = advocates
+                else:
+                    result["council_performance"] = _parse_table(perf_text.split("\n"))
+            else:
+                flush_buffer()
+            current_section = "next_steps"
+            current_subsection = None
+            i += 1
+            continue
+
+        if _is_heading(stripped, "Dissenting Opinions"):
+            if current_section == "next_steps":
+                result["next_steps"] = flush_buffer()
+            elif current_subsection == "key_moments":
                 moments_text = flush_buffer()
                 result["key_moments"] = _parse_bullets(moments_text)
             else:
@@ -641,8 +789,10 @@ def parse_session_summary(md_text):
             i += 1
             continue
 
-        if stripped.startswith("## Build This"):
-            if current_subsection == "key_moments":
+        if _is_heading(stripped, "Build This"):
+            if current_section == "next_steps":
+                result["next_steps"] = flush_buffer()
+            elif current_subsection == "key_moments":
                 moments_text = flush_buffer()
                 result["key_moments"] = _parse_bullets(moments_text)
             elif current_section == "dissenting_opinions":
@@ -650,6 +800,63 @@ def parse_session_summary(md_text):
             else:
                 flush_buffer()
             current_section = "build_this"
+            current_subsection = None
+            i += 1
+            continue
+
+        if _is_heading(stripped, "How The Tribunal Works", "How the Tribunal Works"):
+            # Flush whatever section came before
+            if current_section == "next_steps":
+                result["next_steps"] = flush_buffer()
+            elif current_section == "build_this":
+                result["build_this"] = flush_buffer()
+            elif current_subsection == "key_moments":
+                moments_text = flush_buffer()
+                result["key_moments"] = _parse_bullets(moments_text)
+            elif current_section == "dissenting_opinions":
+                result["dissenting_opinions"] = flush_buffer()
+            else:
+                flush_buffer()
+            current_section = "how_tribunal_works"
+            current_subsection = None
+            i += 1
+            continue
+
+        # Generic appendix detection: ## Appendix A: Title, or bare Appendix A: Title
+        appendix_match = re.match(r'^(?:#{1,3}\s+)?Appendix\s+([A-Z]):\s*(.*)', stripped)
+        if appendix_match:
+            appendix_title = appendix_match.group(2).strip()
+            # Flush whatever section came before
+            if current_section == "how_tribunal_works":
+                result["how_tribunal_works"] = flush_buffer()
+            elif current_section == "build_this":
+                result["build_this"] = flush_buffer()
+            elif current_section == "inline_appendix":
+                result["inline_appendices"].append((_current_appendix_title, flush_buffer()))
+            elif current_section == "glossary":
+                result["glossary"] = flush_buffer()
+            else:
+                flush_buffer()
+            # If the appendix is "Glossary", treat it as the glossary section
+            if "glossary" in appendix_title.lower():
+                current_section = "glossary"
+            else:
+                current_section = "inline_appendix"
+                _current_appendix_title = appendix_title
+            current_subsection = None
+            i += 1
+            continue
+
+        if _is_heading(stripped, "Glossary"):
+            if current_section == "how_tribunal_works":
+                result["how_tribunal_works"] = flush_buffer()
+            elif current_section == "build_this":
+                result["build_this"] = flush_buffer()
+            elif current_section == "inline_appendix":
+                result["inline_appendices"].append((_current_appendix_title, flush_buffer()))
+            else:
+                flush_buffer()
+            current_section = "glossary"
             current_subsection = None
             i += 1
             continue
@@ -664,16 +871,32 @@ def parse_session_summary(md_text):
 
     # Flush remaining buffer
     remaining = flush_buffer()
-    if current_section == "build_this":
+    if current_section == "glossary":
+        result["glossary"] = remaining
+    elif current_section == "inline_appendix":
+        result["inline_appendices"].append((_current_appendix_title, remaining))
+    elif current_section == "how_tribunal_works":
+        result["how_tribunal_works"] = remaining
+    elif current_section == "next_steps":
+        result["next_steps"] = remaining
+    elif current_section == "build_this":
         result["build_this"] = remaining
     elif current_section == "dissenting_opinions":
         result["dissenting_opinions"] = remaining
+    elif current_section == "majority_opinion":
+        result["majority_opinion"] = remaining
+    elif current_subsection == "convergence_assessment":
+        result["convergence_assessment"] = remaining
     elif current_subsection == "key_moments":
         result["key_moments"] = _parse_bullets(remaining)
     elif current_subsection == "council_performance":
-        result["council_performance"] = _parse_table(remaining.split("\n"))
-    elif current_section == "the_question":
-        result["the_question"] = remaining
+        advocates = _parse_council_subsections(remaining)
+        if advocates:
+            result["council_performance"] = advocates
+        else:
+            result["council_performance"] = _parse_table(remaining.split("\n"))
+    elif current_section == "the_prompt":
+        result["the_prompt"] = remaining
     elif current_section == "recommended_outcome":
         result["recommended_outcome"] = remaining
 
@@ -688,15 +911,22 @@ def parse_session_summary(md_text):
 
 def _parse_bullets(text):
     # type: (str) -> list
-    """Parse markdown bullet list into list of strings."""
+    """Parse markdown bullet or numbered list into list of strings."""
     bullets = []
     current = []  # type: list
     for line in text.split("\n"):
         stripped = line.strip()
-        if stripped.startswith("- ") or stripped.startswith("* "):
+        # Match "- ", "* ", or "1. ", "2. ", etc.
+        is_bullet = stripped.startswith("- ") or stripped.startswith("* ")
+        numbered_match = re.match(r'^(\d+)\.\s+', stripped) if not is_bullet else None
+        if is_bullet:
             if current:
                 bullets.append(" ".join(current))
             current = [stripped[2:]]
+        elif numbered_match:
+            if current:
+                bullets.append(" ".join(current))
+            current = [stripped[numbered_match.end():]]
         elif stripped and current:
             # Continuation line
             current.append(stripped)
@@ -798,7 +1028,14 @@ def _render_markdown_content(md_text, styles):
             i += 1
             continue
 
-        # Headings
+        # Headings (check deeper levels first to avoid prefix matching)
+        if stripped.startswith("#### "):
+            # Strip all leading # and whitespace for ####+ headings
+            heading_text = stripped.lstrip("#").strip()
+            flowables.append(Paragraph(_md_inline_to_xml(heading_text), styles['h3']))
+            flowables.append(Spacer(1, 4))
+            i += 1
+            continue
         if stripped.startswith("### "):
             flowables.append(Paragraph(_md_inline_to_xml(stripped[4:]), styles['h3']))
             flowables.append(Spacer(1, 4))
@@ -829,25 +1066,66 @@ def _render_markdown_content(md_text, styles):
                 flowables.append(Spacer(1, 8))
             continue
 
-        # Bullet lists — collect contiguous bullet lines
+        # Bullet lists — collect contiguous bullet lines (with sub-bullet support)
         # Note: "* " is a bullet, but "**" (bold) is NOT a bullet
         if stripped.startswith("- ") or (stripped.startswith("* ") and not stripped.startswith("**")):
-            bullet_lines = []
+            bullet_items = []  # list of (indent_level, text)
             while i < len(lines):
-                s = lines[i].strip()
-                if s.startswith("- ") or (s.startswith("* ") and not s.startswith("**")):
-                    bullet_lines.append(s[2:])
+                raw = lines[i]
+                s = raw.strip()
+                # Detect indentation level for sub-bullets
+                leading_spaces = len(raw) - len(raw.lstrip())
+                is_bullet = s.startswith("- ") or (s.startswith("* ") and not s.startswith("**"))
+                if is_bullet:
+                    indent_level = 1 if leading_spaces >= 2 else 0
+                    bullet_items.append((indent_level, s[2:]))
                     i += 1
-                elif s and bullet_lines and not s.startswith("#") and not s.startswith("|"):
+                elif s and bullet_items and not s.startswith("#") and not s.startswith("|"):
                     # Continuation line
-                    bullet_lines[-1] += " " + s
+                    prev_level, prev_text = bullet_items[-1]
+                    bullet_items[-1] = (prev_level, prev_text + " " + s)
                     i += 1
                 else:
                     break
-            for bl in bullet_lines:
+            for level, bl in bullet_items:
+                if level >= 1:
+                    flowables.append(Paragraph(
+                        "<bullet>&#8211;</bullet> " + _md_inline_to_xml(bl),
+                        styles['sub_bullet'],
+                    ))
+                else:
+                    flowables.append(Paragraph(
+                        "<bullet>&bull;</bullet> " + _md_inline_to_xml(bl),
+                        styles['bullet'],
+                    ))
+            flowables.append(Spacer(1, 4))
+            continue
+
+        # Numbered lists: 1. text, 2. text, etc.
+        num_match = re.match(r'^(\d+)\.[\s]+', stripped)
+        if num_match:
+            numbered_items = []  # list of (indent_level, number, text)
+            while i < len(lines):
+                raw = lines[i]
+                s = raw.strip()
+                nm = re.match(r'^(\d+)\.[\s]+', s)
+                leading_spaces = len(raw) - len(raw.lstrip())
+                if nm:
+                    indent_level = 1 if leading_spaces >= 2 else 0
+                    numbered_items.append((indent_level, nm.group(1), s[nm.end():]))
+                    i += 1
+                elif s and numbered_items and not s.startswith("#") and not s.startswith("|"):
+                    # Continuation line
+                    prev_level, prev_num, prev_text = numbered_items[-1]
+                    numbered_items[-1] = (prev_level, prev_num, prev_text + " " + s)
+                    i += 1
+                else:
+                    break
+            for level, num, text in numbered_items:
+                style = styles['sub_bullet'] if level >= 1 else styles['bullet']
                 flowables.append(Paragraph(
-                    "<bullet>&bull;</bullet> " + _md_inline_to_xml(bl),
-                    styles['bullet'],
+                    "<bullet>%s.</bullet> " % _escape_xml(num) + _md_inline_to_xml(text),
+                    style,
                 ))
             flowables.append(Spacer(1, 4))
             continue
@@ -879,6 +1157,9 @@ def _render_markdown_content(md_text, styles):
             # "* " is a bullet (but NOT "**bold**" or "*italic*")
             if s.startswith("* ") and not s.startswith("**"):
                 break
+            # Numbered lists: "1. text", "2. text", etc.
+            if re.match(r'^\d+\.\s+', s):
+                break
             para_parts.append(s)
             i += 1
         if para_parts:
@@ -886,6 +1167,75 @@ def _render_markdown_content(md_text, styles):
                 _md_inline_to_xml(" ".join(para_parts)),
                 styles['body'],
             ))
+
+    return flowables
+
+
+def _render_glossary_tables(md_text, styles):
+    # type: (str, dict) -> list
+    """Render glossary markdown as tables (Term/Definition).
+
+    Handles:
+    - ### subsection headings (Domain Terms, Tribunal Terms)
+    - Markdown table format (| Term | Definition |)
+    - Bullet-list fallback (- **Term**: Definition) for backward compatibility
+    """
+    flowables = []
+    lines = md_text.split("\n")
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+
+        if not stripped:
+            i += 1
+            continue
+
+        # Subsection headings (### Domain Terms, ### Tribunal Terms)
+        if stripped.startswith("### "):
+            title = stripped[4:].strip()
+            flowables.append(Spacer(1, 8))
+            flowables.append(Paragraph(_escape_xml(title), styles['h2']))
+            flowables.append(Spacer(1, 4))
+            i += 1
+            continue
+
+        # Markdown table block
+        if stripped.startswith("|"):
+            table_lines = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                table_lines.append(lines[i])
+                i += 1
+            headers, rows = _parse_table(table_lines)
+            if headers and rows:
+                col_widths = [CONTENT_W * 0.30, CONTENT_W * 0.70]
+                table = make_data_table(headers, rows, col_widths=col_widths,
+                                        styles_dict=styles)
+                flowables.append(table)
+                flowables.append(Spacer(1, 8))
+            continue
+
+        # Bullet-list fallback: - **Term**: Definition
+        if stripped.startswith("- **"):
+            bullet_rows = []
+            while i < len(lines) and lines[i].strip().startswith("- **"):
+                bline = lines[i].strip()[2:]  # strip "- "
+                # Parse **Term**: Definition or **Term** — Definition
+                m = re.match(r'\*\*(.+?)\*\*[:\s—–-]+\s*(.*)', bline)
+                if m:
+                    bullet_rows.append([m.group(1).strip(), m.group(2).strip()])
+                else:
+                    bullet_rows.append([bline.strip("* "), ""])
+                i += 1
+            if bullet_rows:
+                col_widths = [CONTENT_W * 0.30, CONTENT_W * 0.70]
+                table = make_data_table(["Term", "Definition"], bullet_rows,
+                                        col_widths=col_widths, styles_dict=styles)
+                flowables.append(table)
+                flowables.append(Spacer(1, 8))
+            continue
+
+        # Skip any other lines (instructions, etc.)
+        i += 1
 
     return flowables
 
@@ -952,44 +1302,88 @@ def _build_story(parsed, styles, appendices=None):
             styles['subtitle'],
         ))
 
+    # Anonymization note on cover page
+    if meta.get("anonymization_note"):
+        story.append(Spacer(1, 8))
+        anon_style = ParagraphStyle(
+            'AnonNote', fontName='Helvetica-Oblique', fontSize=8,
+            leading=11, textColor=MUTED, alignment=TA_LEFT,
+        )
+        story.append(Paragraph(
+            _escape_xml(meta["anonymization_note"]),
+            anon_style,
+        ))
+
     story.append(Spacer(1, 30))
     story.append(ThickRule(CONTENT_W, NAVY, 1.5))
     story.append(Spacer(1, 20))
 
     # Question preview on cover
-    if parsed["the_question"]:
+    if parsed["the_prompt"]:
         story.append(CalloutBox(
-            "<b>THE QUESTION:</b> " + _md_inline_to_xml(parsed["the_question"]),
+            "<b>THE PROMPT:</b> " + _md_inline_to_xml(parsed["the_prompt"]),
             CONTENT_W, styles['callout'], LIGHT_GRAY, ACCENT,
         ))
         story.append(Spacer(1, 30))
 
-    # Mini TOC
-    toc_header_style = ParagraphStyle(
-        'TOCHead', fontName='Helvetica-Bold', fontSize=10,
-        leading=14, textColor=NAVY, spaceAfter=8,
-    )
+    # ========================================================================
+    # HOW THE TRIBUNAL WORKS (front-matter — between cover and contents)
+    # ========================================================================
+    if parsed.get("how_tribunal_works"):
+        story.append(PageBreak())
+        story.append(Spacer(1, 0.5 * inch))
+        story.append(Paragraph("How The Tribunal Works", styles['h1']))
+        story.append(AccentBar(color=MED_BLUE))
+        story.append(Spacer(1, 10))
+
+        htw_text = parsed["how_tribunal_works"]
+        for para in htw_text.split("\n\n"):
+            para = para.strip()
+            if not para:
+                continue
+            story.append(Paragraph(
+                _md_inline_to_xml(para.replace("\n", " ")),
+                styles['body'],
+            ))
+
+    # ========================================================================
+    # CONTENTS PAGE (separate page after cover / How The Tribunal Works)
+    # ========================================================================
+    story.append(PageBreak())
+
+    story.append(Spacer(1, 0.5 * inch))
+    story.append(Paragraph("Contents", styles['h1']))
+    story.append(AccentBar())
+    story.append(Spacer(1, 14))
+
     toc_style = ParagraphStyle(
-        'MiniTOC', fontName='Helvetica', fontSize=9, leading=16,
+        'MiniTOC', fontName='Helvetica', fontSize=10, leading=20,
         textColor=DARK_GRAY, leftIndent=4,
     )
-    story.append(Paragraph("Contents", toc_header_style))
-    story.append(ThinRule(CONTENT_W * 0.15, ACCENT, 1))
-    story.append(Spacer(1, 6))
 
     toc_items = [
-        "1. The Question",
-        "2. Recommended Outcome",
-        "3. How We Got Here",
+        "1. The Prompt",
+        "2. Bottom Line",
     ]
+    if parsed.get("majority_opinion"):
+        toc_items.append("%d. Opinion of the Court" % (len(toc_items) + 1))
+    toc_items.append("%d. How We Got Here" % (len(toc_items) + 1))
+    if parsed.get("next_steps"):
+        toc_items.append("%d. Next Steps" % (len(toc_items) + 1))
     if parsed.get("dissenting_opinions"):
         toc_items.append("%d. Dissenting Opinions" % (len(toc_items) + 1))
     if parsed.get("build_this"):
         toc_items.append("%d. Build This" % (len(toc_items) + 1))
+    # Inline appendices from the markdown itself (e.g., Appendix A: The Arguments)
+    all_appendices = list(parsed.get("inline_appendices", []))
     if appendices:
-        for idx, (title, _) in enumerate(appendices):
-            letter_label = chr(ord("A") + idx)
-            toc_items.append("Appendix %s. %s" % (letter_label, title))
+        all_appendices.extend(appendices)
+    for idx, (title, _) in enumerate(all_appendices):
+        letter_label = chr(ord("A") + idx)
+        toc_items.append("Appendix %s. %s" % (letter_label, title))
+    if parsed.get("glossary"):
+        glossary_letter = chr(ord("A") + len(all_appendices))
+        toc_items.append("Appendix %s. Glossary" % glossary_letter)
     for item in toc_items:
         story.append(Paragraph(_escape_xml(item), toc_style))
 
@@ -997,15 +1391,31 @@ def _build_story(parsed, styles, appendices=None):
     story.append(PageBreak())
 
     # ========================================================================
+    # Anonymization note before content
+    # ========================================================================
+    if meta.get("anonymization_note"):
+        anon_body_style = ParagraphStyle(
+            'AnonNoteBody', fontName='Helvetica-Oblique', fontSize=7.5,
+            leading=10, textColor=MUTED,
+        )
+        story.append(Paragraph(
+            _escape_xml(meta["anonymization_note"]),
+            anon_body_style,
+        ))
+        story.append(Spacer(1, 4))
+        story.append(ThinRule(CONTENT_W, RULE_COLOR, 0.5))
+        story.append(Spacer(1, 10))
+
+    # ========================================================================
     # SECTION: THE QUESTION
     # ========================================================================
-    story.append(Paragraph("The Question", styles['h1']))
+    story.append(Paragraph("The Prompt", styles['h1']))
     story.append(AccentBar())
     story.append(Spacer(1, 8))
 
-    if parsed["the_question"]:
+    if parsed["the_prompt"]:
         story.append(Paragraph(
-            _md_inline_to_xml(parsed["the_question"]),
+            _md_inline_to_xml(parsed["the_prompt"]),
             styles['body'],
         ))
     story.append(Spacer(1, 12))
@@ -1013,20 +1423,25 @@ def _build_story(parsed, styles, appendices=None):
     # ========================================================================
     # SECTION: RECOMMENDED OUTCOME
     # ========================================================================
-    story.append(Paragraph("Recommended Outcome", styles['h1']))
+    story.append(Paragraph("Bottom Line", styles['h1']))
     story.append(AccentBar())
     story.append(Spacer(1, 8))
 
     if parsed["recommended_outcome"]:
-        # Split into paragraphs on blank lines
-        for para in parsed["recommended_outcome"].split("\n\n"):
-            para = para.strip()
-            if para:
-                story.append(Paragraph(
-                    _md_inline_to_xml(para),
-                    styles['body'],
-                ))
+        story.extend(_render_markdown_content(parsed["recommended_outcome"], styles))
     story.append(Spacer(1, 12))
+
+    # ========================================================================
+    # SECTION: MAJORITY OPINION (optional — between Recommended Outcome and How We Got Here)
+    # ========================================================================
+    if parsed.get("majority_opinion"):
+        story.append(Paragraph("Opinion of the Court (Majority Opinion)", styles['h1']))
+        story.append(AccentBar(color=ACCENT))
+        story.append(Spacer(1, 8))
+
+        maj_text = parsed["majority_opinion"]
+        story.extend(_render_markdown_content(maj_text, styles))
+        story.append(Spacer(1, 12))
 
     # ========================================================================
     # SECTION: HOW WE GOT HERE
@@ -1035,26 +1450,64 @@ def _build_story(parsed, styles, appendices=None):
     story.append(AccentBar())
     story.append(Spacer(1, 8))
 
-    # Sub-section: Council Performance table
-    headers, rows = parsed["council_performance"]
-    if headers and rows:
-        story.append(Paragraph("Council Performance", styles['h2']))
-        story.append(Spacer(1, 4))
+    # Sub-section: Scorecard (formerly Council Performance)
+    perf = parsed["council_performance"]
 
-        # Compute column widths for Model | Final Position | Rank | Note
-        n_cols = len(headers)
-        if n_cols == 4:
-            col_widths = [
-                CONTENT_W * 0.22,   # Model
-                CONTENT_W * 0.38,   # Final Position
-                CONTENT_W * 0.10,   # Rank
-                CONTENT_W * 0.30,   # Note
-            ]
-        else:
+    # New subsection format: list of dicts (legacy per-advocate cards)
+    if isinstance(perf, list) and perf and isinstance(perf[0], dict):
+        story.append(Paragraph("Scorecard", styles['h2']))
+        story.append(Spacer(1, 6))
+
+        for adv in perf:
+            rank_str = adv.get("rank", "")
+            model_name = adv.get("model", "Unknown")
+            if rank_str and rank_str != "-":
+                heading = "%s — Rank #%s" % (model_name, rank_str)
+            elif rank_str == "-":
+                heading = "%s — Withdrawn" % model_name
+            else:
+                heading = model_name
+            story.append(Paragraph(_md_inline_to_xml(heading), styles['h3']))
+            story.append(Spacer(1, 3))
+
+            if adv.get("opening"):
+                story.append(Paragraph(
+                    "<b>Opening Position:</b> " + _md_inline_to_xml(adv["opening"]),
+                    styles['body'],
+                ))
+            if adv.get("final"):
+                story.append(Paragraph(
+                    "<b>Final Position:</b> " + _md_inline_to_xml(adv["final"]),
+                    styles['body'],
+                ))
+            if adv.get("catalyst"):
+                story.append(Paragraph(
+                    "<b>Key Catalyst:</b> " + _md_inline_to_xml(adv["catalyst"]),
+                    styles['body'],
+                ))
+            story.append(Spacer(1, 8))
+            story.append(ThinRule(CONTENT_W * 0.3, RULE_COLOR, 0.5))
+            story.append(Spacer(1, 6))
+
+    # Table format: tuple of (headers, rows) — new Scorecard matrix or legacy
+    elif isinstance(perf, tuple):
+        headers, rows = perf
+        if headers and rows:
+            story.append(Paragraph("Scorecard", styles['h2']))
+            story.append(Spacer(1, 4))
+
+            n_cols = len(headers)
             col_widths = [CONTENT_W / n_cols] * n_cols
 
-        table = make_data_table(headers, rows, col_widths=col_widths, styles_dict=styles)
-        story.append(table)
+            table = make_data_table(headers, rows, col_widths=col_widths, styles_dict=styles)
+            story.append(table)
+            story.append(Spacer(1, 12))
+
+    # Sub-section: Convergence Assessment (new)
+    if parsed.get("convergence_assessment"):
+        story.append(Paragraph("Convergence Assessment", styles['h2']))
+        story.append(Spacer(1, 4))
+        story.extend(_render_markdown_content(parsed["convergence_assessment"], styles))
         story.append(Spacer(1, 12))
 
     # Sub-section: Key Moments
@@ -1069,31 +1522,27 @@ def _build_story(parsed, styles, appendices=None):
         story.append(Spacer(1, 12))
 
     # ========================================================================
+    # SECTION: NEXT STEPS (optional — new section)
+    # ========================================================================
+    if parsed.get("next_steps"):
+        story.append(Paragraph("Next Steps", styles['h1']))
+        story.append(AccentBar())
+        story.append(Spacer(1, 8))
+        story.extend(_render_markdown_content(parsed["next_steps"], styles))
+        story.append(Spacer(1, 12))
+
+    # ========================================================================
     # SECTION: DISSENTING OPINIONS (optional)
     # ========================================================================
     if parsed.get("dissenting_opinions"):
+        story.append(PageBreak())
         story.append(Paragraph("Dissenting Opinions", styles['h1']))
         story.append(AccentBar(color=ACCENT2))
         story.append(Spacer(1, 8))
 
-        # Could be paragraphs or bullets
+        # Render dissent content with full markdown support (headings, bullets, etc.)
         dissent = parsed["dissenting_opinions"]
-        bullets = _parse_bullets(dissent)
-        if bullets:
-            for bullet in bullets:
-                story.append(CalloutBox(
-                    _md_inline_to_xml(bullet),
-                    CONTENT_W, styles['callout'], LIGHT_GRAY, ACCENT2,
-                ))
-                story.append(Spacer(1, 6))
-        else:
-            for para in dissent.split("\n\n"):
-                para = para.strip()
-                if para:
-                    story.append(Paragraph(
-                        _md_inline_to_xml(para),
-                        styles['body'],
-                    ))
+        story.extend(_render_markdown_content(dissent, styles))
         story.append(Spacer(1, 12))
 
     # ========================================================================
@@ -1152,10 +1601,13 @@ def _build_story(parsed, styles, appendices=None):
                     ))
 
     # ========================================================================
-    # APPENDICES (auto-included: Debrief + Play-by-Play)
+    # APPENDICES (inline from markdown + auto-discovered from files)
     # ========================================================================
+    all_appendices = list(parsed.get("inline_appendices", []))
     if appendices:
-        for idx, (title, md_text) in enumerate(appendices):
+        all_appendices.extend(appendices)
+    if all_appendices:
+        for idx, (title, md_text) in enumerate(all_appendices):
             letter_label = chr(ord("A") + idx)
             story.append(PageBreak())
             story.append(Paragraph(
@@ -1166,7 +1618,68 @@ def _build_story(parsed, styles, appendices=None):
             story.append(Spacer(1, 8))
             story.extend(_render_markdown_content(md_text, styles))
 
+    # ========================================================================
+    # GLOSSARY (absolute last — page break, table layout, appendix lettered)
+    # ========================================================================
+    if parsed.get("glossary"):
+        glossary_letter = chr(ord("A") + len(all_appendices))
+        story.append(PageBreak())
+        story.append(Paragraph(
+            "Appendix %s: Glossary" % glossary_letter,
+            styles['h1'],
+        ))
+        story.append(AccentBar(color=MED_BLUE))
+        story.append(Spacer(1, 10))
+
+        story.extend(_render_glossary_tables(parsed["glossary"], styles))
+
     return story
+
+
+def _keep_headings_with_content(story):
+    # type: (list) -> list
+    """Post-process flowables to keep headings with their following content.
+
+    Wraps each heading (Paragraph with h1/h2/h3 style) together with the next
+    1-2 flowables in a KeepTogether block, preventing orphaned headings at
+    the bottom of a page.
+    """
+    heading_style_names = {'H1', 'H2', 'H3'}
+    result = []
+    i = 0
+    while i < len(story):
+        item = story[i]
+        # Check if this is a heading paragraph
+        is_heading = (
+            isinstance(item, Paragraph) and
+            hasattr(item, 'style') and
+            item.style.name in heading_style_names
+        )
+        if is_heading:
+            # Gather the heading + accent bar/spacer + first content element
+            group = [item]
+            j = i + 1
+            # Collect up to 3 following non-PageBreak elements to keep together
+            while j < len(story) and len(group) < 4:
+                nxt = story[j]
+                if isinstance(nxt, PageBreak):
+                    break
+                # Don't include Tables in KeepTogether — they can be very
+                # large (e.g. glossary) and would push the heading to the
+                # next page, leaving the previous page blank.
+                if isinstance(nxt, Table):
+                    break
+                group.append(nxt)
+                j += 1
+                # Stop after we've got the heading + decorations + first real content
+                if isinstance(nxt, (Paragraph, CalloutBox)):
+                    break
+            result.append(KeepTogether(group))
+            i = j
+        else:
+            result.append(item)
+            i += 1
+    return result
 
 
 def generate_summary_pdf(md_path, output_path=None):
@@ -1174,8 +1687,7 @@ def generate_summary_pdf(md_path, output_path=None):
     """Generate a styled PDF from a session-summary.md file.
 
     Automatically discovers and includes appendices from the same directory:
-    - Appendix A: Debrief (debrief.md)
-    - Appendix B: Play-by-Play (play-by-play.md)
+    - Appendix A: Play-by-Play (play-by-play.md)
 
     Args:
         md_path: Path to session-summary.md.
@@ -1192,19 +1704,8 @@ def generate_summary_pdf(md_path, output_path=None):
     if output_path is None:
         output_path = str(Path(md_path).with_suffix(".pdf"))
 
-    # Auto-discover appendices from session directory
-    session_dir = Path(md_path).parent
+    # Auto-discovered appendices from session directory (currently none)
     appendices = []
-    appendix_files = [
-        ("Debrief", "debrief.md"),
-        ("Play-by-Play", "play-by-play.md"),
-    ]
-    for title, filename in appendix_files:
-        appendix_path = session_dir / filename
-        if appendix_path.exists():
-            appendix_text = appendix_path.read_text(encoding="utf-8")
-            if appendix_text.strip():
-                appendices.append((title, appendix_text))
 
     meta = parsed["header_meta"]
 
@@ -1222,6 +1723,7 @@ def generate_summary_pdf(md_path, output_path=None):
 
     styles = build_styles()
     story = _build_story(parsed, styles, appendices=appendices)
+    story = _keep_headings_with_content(story)
 
     doc.build(story)
     return os.path.abspath(output_path)
