@@ -1,6 +1,5 @@
 # The Tribunal: Architecture & Design Specification
 
-> **Author:** m@murrays.org
 > **Date:** February 28, 2026
 > **Status:** DRAFT — Design Review (updated with Kelley-Riedl 2026 findings + T6 tier)
 > **Version:** 0.5.0

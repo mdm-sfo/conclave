@@ -122,7 +122,7 @@ Starting deliberation now.
 Write your submission to file:
 
 ```bash
-mkdir -p ~/wormhole/tribunal-sessions/$(date +%Y%m%d-%H%M%S)
+mkdir -p ~/tribunal-sessions/$(date +%Y%m%d-%H%M%S)
 # Write your submission to the session directory BEFORE calling any APIs
 ```
 
@@ -239,7 +239,7 @@ The orchestrator handles everything:
 [tribunal]   ✓ Justice Qwen-3.5-397B: VERDICT
 [tribunal]   ✓ Justice DeepSeek-R1: VERDICT
 [tribunal]   ✓ Appellate Judge MiniMax-M2.5: VERDICT
-[tribunal] Phase 8: Done. Files written to ~/wormhole/tribunal-sessions/tribunal-rust-or-go-20260228-203200/
+[tribunal] Phase 8: Done. Files written to ~/tribunal-sessions/tribunal-rust-or-go-20260228-203200/
 ```
 
 At T6 (Red Team) depth, you'll also see:
@@ -258,7 +258,7 @@ Read the output files and present to the user:
 
 ### Output Files
 
-The orchestrator writes to `~/wormhole/tribunal-sessions/<session-id>/` (e.g., `tribunal-rust-or-go-20260302-223614/`):
+The orchestrator writes to `~/tribunal-sessions/<session-id>/` (e.g., `tribunal-rust-or-go-20260302-223614/`):
 - `final-output.md` — The clean deliverable (the actual answer, stripped of tribunal framing)
 - `session-summary.md` — Executive summary: Question → Bottom Line → How We Got Here (Scorecard + Key Moments) → Next Steps (T2+ only). **All summaries must define unknown, specialized, or domain-specific terms on first use** and spell out all acronyms on first use. Assume zero prior context.
 - `session-summary.pdf` — Styled PDF version of the session summary (requires `reportlab`)
@@ -300,7 +300,7 @@ Define all domain terms and acronyms on first use. Assume zero prior context.]
 ---
 Session: {session-id} | Depth: {DEPTH} | Advocates: {N} | Judges: {N}
 Duration: {time} | Cost: ~${cost}
-Full logs: ~/wormhole/tribunal-sessions/{session-id}/
+Full logs: ~/tribunal-sessions/{session-id}/
 
 ### Position Stability (T5+ only)
 [Summary from position-stability.md — flag any drift concerns]
@@ -357,7 +357,7 @@ export ELEVENLABS_API_KEY="..."     # ElevenLabs TTS for screenplay audio
 # Optional: Configuration
 export TRIBUNAL_DEFAULT_DEPTH="T3"
 export TRIBUNAL_TIMEOUT="120"           # Per-model timeout in seconds
-export TRIBUNAL_OUTPUT_DIR="~/wormhole/tribunal-sessions"
+export TRIBUNAL_OUTPUT_DIR="~/tribunal-sessions"
 export TRIBUNAL_MAX_COST="5.00"         # Abort if estimated cost exceeds this
 ```
 
