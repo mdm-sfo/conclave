@@ -8,7 +8,7 @@ Instead of asking one model and trusting whatever comes back, it assigns the que
 The orchestrator is deterministic Python. It dispatches, anonymizes, and routes, but never opinionates.
 
 <p align="center">
-  <img src="screenshots/CleanShot 2026-03-19 at 05.42.48@2x.png" alt="Demo" width="600">
+  <img src="screenshots/CleanShot 2026-03-19 at 05.43.09@2x.png" alt="Demo" width="600">
 </p>
 
 ## How It Works
@@ -30,6 +30,10 @@ The Tribunal is a structured multi-model deliberation system. Instead of asking 
 - **T6/Red Team** — 7 rounds + mid-debate judicial checkpoint
 
 The system is deterministic code — it cannot be sycophantic. It dispatches prompts, collects responses, anonymizes identities, and enforces the adversarial structure. The models argue; the code referees.
+
+<p align="center">
+  <img src="screenshots/CleanShot 2026-03-19 at 05.42.48@2x.png" alt="Demo" width="600">
+</p>
 
 ## Why
 
